@@ -44,6 +44,7 @@
 
   var state = createEmptyState();
   var refs = null;
+  var appInitialized = false;
 
   function createEmptyState() {
     return {
@@ -615,6 +616,11 @@
   }
 
   function initApp() {
+    if (appInitialized) {
+      return;
+    }
+    appInitialized = true;
+
     refs = {
       fileInput: document.getElementById("fileInput"),
       dropZone: document.getElementById("dropZone"),
@@ -865,33 +871,46 @@
     );
   }
 
+  function summaryStat(label, value) {
+    return (
+      "<div class=\"summary-stat-box\">" +
+        "<p class=\"summary-stat-label\">" + escapeHtml(label) + "</p>" +
+        "<p class=\"summary-stat-value\">" + escapeHtml(value) + "</p>" +
+      "</div>"
+    );
+  }
+
   function renderLeakSummary() {
     if (!state.leakSummary.length) {
       refs.leakSummary.innerHTML = "<div class=\"empty-state\">Nenhum leak summary disponivel.</div>";
       return;
     }
 
-    var rows = state.leakSummary.map(function (entry) {
+    refs.leakSummary.innerHTML =
+      "<div class=\"summary-stack\">" +
+        state.leakSummary.map(function (entry) {
       var matchingRecords = state.leakRecords.filter(function (record) {
         return record.leakType === entry.leakType;
       }).length;
 
       return (
-        "<tr>" +
-          "<td><span class=\"tag tag-" + severityTag(entry.severity) + "\">" + escapeHtml(entry.label) + "</span></td>" +
-          "<td>" + formatCount(matchingRecords) + "</td>" +
-          "<td>" + formatCount(entry.blocks) + "</td>" +
-          "<td>" + formatBytes(entry.bytes) + "</td>" +
-          "<td>" + escapeHtml(entry.impact) + "</td>" +
-        "</tr>"
+        "<article class=\"summary-row-card\">" +
+          "<div class=\"summary-row-head\">" +
+            "<div>" +
+              "<span class=\"tag tag-" + severityTag(entry.severity) + "\">" + escapeHtml(entry.label) + "</span>" +
+            "</div>" +
+            "<p class=\"summary-row-title\">" + escapeHtml(formatBytes(entry.bytes)) + "</p>" +
+          "</div>" +
+          "<div class=\"summary-inline-stats\">" +
+            summaryStat("Loss records", formatCount(matchingRecords)) +
+            summaryStat("Blocos", formatCount(entry.blocks)) +
+            summaryStat("Bytes", formatBytes(entry.bytes)) +
+          "</div>" +
+          "<p class=\"summary-row-impact\">" + escapeHtml(entry.impact) + "</p>" +
+        "</article>"
       );
-    }).join("");
-
-    refs.leakSummary.innerHTML =
-      "<table class=\"summary-table\">" +
-        "<thead><tr><th>Tipo</th><th>Loss records</th><th>Blocos</th><th>Bytes</th><th>Impacto</th></tr></thead>" +
-        "<tbody>" + rows + "</tbody>" +
-      "</table>";
+        }).join("") +
+      "</div>";
   }
 
   function renderErrorSummary() {
@@ -916,11 +935,21 @@
 
     if (!rows.length) {
       if (state.errorSummary) {
-        refs.errorSummary.innerHTML = metricBox(
-          "ERROR SUMMARY",
-          formatCount(state.errorSummary.errors) + " erros",
-          formatCount(state.errorSummary.contexts) + " contextos"
-        );
+        refs.errorSummary.innerHTML =
+          "<div class=\"summary-stack\">" +
+            "<article class=\"summary-row-card\">" +
+              "<div class=\"summary-row-head\">" +
+                "<span class=\"tag tag-info\">Error summary</span>" +
+                "<p class=\"summary-row-title\">" + escapeHtml(formatCount(state.errorSummary.errors) + " erros") + "</p>" +
+              "</div>" +
+              "<div class=\"summary-inline-stats\">" +
+                summaryStat("Contextos", formatCount(state.errorSummary.contexts)) +
+                summaryStat("Suprimidos", formatCount(state.errorSummary.suppressedErrors || 0)) +
+                summaryStat("Parser", "Sem blocos individuais") +
+              "</div>" +
+              "<p class=\"summary-row-impact\">O log nao trouxe erros de memoria detalhados alem do resumo final.</p>" +
+            "</article>" +
+          "</div>";
       } else {
         refs.errorSummary.innerHTML = "<div class=\"empty-state\">Nenhum erro de memoria individual encontrado no log.</div>";
       }
@@ -928,21 +957,25 @@
     }
 
     refs.errorSummary.innerHTML =
-      "<table class=\"summary-table\">" +
-        "<thead><tr><th>Tipo</th><th>Severidade</th><th>Ocorrencias</th><th>Primeira frame</th></tr></thead>" +
-        "<tbody>" +
-          rows.map(function (item) {
-            return (
-              "<tr>" +
-                "<td>" + escapeHtml(item[0]) + "</td>" +
-                "<td><span class=\"tag tag-" + severityTag(item[1].severity) + "\">" + escapeHtml(item[1].severity) + "</span></td>" +
-                "<td>" + formatCount(item[1].count) + "</td>" +
-                "<td>" + escapeHtml(simplifyFrame(item[1].firstFrame)) + "</td>" +
-              "</tr>"
-            );
-          }).join("") +
-        "</tbody>" +
-      "</table>";
+      "<div class=\"summary-stack\">" +
+        rows.map(function (item) {
+          return (
+            "<article class=\"summary-row-card\">" +
+              "<div class=\"summary-row-head\">" +
+                "<div>" +
+                  "<span class=\"tag tag-" + severityTag(item[1].severity) + "\">" + escapeHtml(item[1].severity) + "</span>" +
+                "</div>" +
+                "<p class=\"summary-row-title\">" + escapeHtml(item[0]) + "</p>" +
+              "</div>" +
+              "<div class=\"summary-inline-stats\">" +
+                summaryStat("Ocorrencias", formatCount(item[1].count)) +
+                summaryStat("Primeira frame", simplifyFrame(item[1].firstFrame) || "N/A") +
+                summaryStat("Fonte", "Valgrind / ASan") +
+              "</div>" +
+            "</article>"
+          );
+        }).join("") +
+      "</div>";
   }
 
   function renderDiagnostics() {
@@ -1216,6 +1249,10 @@
   global.MemoryAnalyzer = api;
 
   if (typeof document !== "undefined") {
-    document.addEventListener("DOMContentLoaded", initApp);
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initApp, { once: true });
+    } else {
+      initApp();
+    }
   }
 })(typeof window !== "undefined" ? window : globalThis);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Memory Analyzer</title>
+  <title>TFS Memory Analyzer - Valgrind &amp; ASan Viewer</title>
   <meta name="description" content="Visualizador offline para logs de Valgrind e AddressSanitizer.">
   <link rel="stylesheet" href="./assets/styles.css">
 </head>
@@ -13,8 +13,8 @@
       <div class="hero">
         <div class="hero-copy">
           <p class="eyebrow">Offline log viewer</p>
-          <h1>Memory Analyzer</h1>
-          <p class="hero-text">Le o log inteiro, separa loss records, resume heap usage e preserva a saida bruta completa.</p>
+          <h1>TFS Memory Analyzer</h1>
+          <p class="hero-text">Visualizador para logs do TFS / forgottenserver com parser robusto para Valgrind e AddressSanitizer, incluindo saida bruta completa.</p>
         </div>
         <nav class="hero-nav" aria-label="Atalhos">
           <a href="#overview-panel">Visao geral</a>
@@ -25,6 +25,14 @@
       </div>
     </div>
   </header>
+
+  <div class="shell">
+    <div class="credit-bar">
+      Viewer for <strong>TFS / forgottenserver</strong> Valgrind &amp; ASan logs
+      <span class="credit-sep">|</span>
+      by <strong>Mateus</strong>
+    </div>
+  </div>
 
   <main class="shell main-layout">
     <section class="panel intake-panel" id="input-panel">
@@ -226,6 +234,10 @@
       <div id="rawLogContent" class="raw-log"></div>
     </section>
   </main>
+
+  <footer class="shell site-footer">
+    <p>Viewer for <strong>TFS / forgottenserver</strong> Valgrind &amp; ASan logs by <strong>Mateus</strong>.</p>
+  </footer>
 
   <script src="./assets/app.js"></script>
 </body>
