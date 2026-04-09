@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +8,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: \'Segoe UI\', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             color: #333;
             padding: 20px;
@@ -190,10 +190,11 @@
             color: #d4d4d4;
             padding: 14px;
             border-radius: 6px;
-            font-family: \'Courier New\', monospace;
+            font-family: 'Courier New', monospace;
             font-size: 0.82em;
             overflow-x: auto;
             line-height: 1.6;
+            white-space: pre-wrap;
             margin-top: 10px;
         }
 
@@ -277,11 +278,11 @@
     </div>
 
     <div class="tabs">
-        <button class="tab active" onclick="switchTab(\'overview\',this)">📊 Overview</button>
-        <button class="tab" onclick="switchTab(\'errors\',this)">🚨 Erros</button>
-        <button class="tab" onclick="switchTab(\'leaks\',this)">💧 Leaks</button>
-        <button class="tab" onclick="switchTab(\'summary\',this)">📋 Resumo por Tipo</button>
-        <button class="tab" onclick="switchTab(\'help\',this)">❓ Como Usar</button>
+        <button class="tab active" onclick="switchTab('overview',this)">📊 Overview</button>
+        <button class="tab" onclick="switchTab('errors',this)">🚨 Erros</button>
+        <button class="tab" onclick="switchTab('leaks',this)">💧 Leaks</button>
+        <button class="tab" onclick="switchTab('summary',this)">📋 Resumo por Tipo</button>
+        <button class="tab" onclick="switchTab('help',this)">❓ Como Usar</button>
     </div>
 
     <!-- OVERVIEW -->
@@ -398,9 +399,9 @@ ASAN_OPTIONS=log_path=asan.log ./tfs</div>
 <script>
 let parsedErrors = [];
 let parsedLeaks  = [];
-let rawSource    = \'valgrind\';
+let rawSource    = 'valgrind';
 
-document.getElementById(\'logFile\').addEventListener(\'change\', function(e) {
+document.getElementById('logFile').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -409,7 +410,7 @@ document.getElementById(\'logFile\').addEventListener(\'change\', function(e) {
         rawSource = detectSource(txt);
         parsedErrors = [];
         parsedLeaks  = [];
-        if (rawSource === \'valgrind\') {
+        if (rawSource === 'valgrind') {
             parseValgrind(txt);
         } else {
             parseAsan(txt);
@@ -420,11 +421,11 @@ document.getElementById(\'logFile\').addEventListener(\'change\', function(e) {
 });
 
 function detectSource(txt) {
-    if (txt.includes(\'==\') && txt.includes(\'Memcheck\')) return \'valgrind\';
-    if (txt.includes(\'AddressSanitizer\') || txt.includes(\'ASAN\') || txt.includes(\'ERROR: AddressSanitizer\')) return \'asan\';
+    if (txt.includes('==') && txt.includes('Memcheck')) return 'valgrind';
+    if (txt.includes('AddressSanitizer') || txt.includes('ASAN') || txt.includes('ERROR: AddressSanitizer')) return 'asan';
     // try to guess
-    if (txt.includes(\'==\') && (txt.includes(\'Invalid read\') || txt.includes(\'Invalid write\'))) return \'valgrind\';
-    return \'valgrind\';
+    if (txt.includes('==') && (txt.includes('Invalid read') || txt.includes('Invalid write'))) return 'valgrind';
+    return 'valgrind';
 }
 
 // ============================================================
@@ -432,15 +433,15 @@ function detectSource(txt) {
 // ============================================================
 function parseValgrind(txt) {
     // split by double blank line patterns or ==PID== headings
-    const lines = txt.split(/\\r?\\n/);
-    let pid = \'?\';
-    const pidMatch = txt.match(/==(\\d+)==/);
+    const lines = txt.split(/\r?\n/);
+    let pid = '?';
+    const pidMatch = txt.match(/==(\d+)==/);
     if (pidMatch) pid = pidMatch[1];
 
     // collect error blocks — each starts with an error keyword
     const errorKeywords = [
-        \'Invalid read\', \'Invalid write\', \'Use of uninitialised\',
-        \'Conditional jump\', \'Invalid free\', \'Mismatched free\'
+        'Invalid read', 'Invalid write', 'Use of uninitialised',
+        'Conditional jump', 'Invalid free', 'Mismatched free'
     ];
 
     let blocks = [];
@@ -448,16 +449,16 @@ function parseValgrind(txt) {
 
     for (let i = 0; i < lines.length; i++) {
         const raw = lines[i];
-        const clean = raw.replace(/^==\\d+== ?/, \'\');
+        const clean = raw.replace(/^==\d+== ?/, '');
 
         if (errorKeywords.some(k => clean.startsWith(k))) {
             if (currentBlock) blocks.push(currentBlock);
             currentBlock = { type: clean.trim(), frames: [], extraLines: [] };
-        } else if (clean.startsWith(\'at 0x\') || clean.startsWith(\'by 0x\')) {
+        } else if (clean.startsWith('at 0x') || clean.startsWith('by 0x')) {
             if (currentBlock) currentBlock.frames.push(clean.trim());
-        } else if (clean.startsWith(\'Address\') || clean.startsWith(\'Block was\') || clean.startsWith(\'Source\')) {
+        } else if (clean.startsWith('Address') || clean.startsWith('Block was') || clean.startsWith('Source')) {
             if (currentBlock) currentBlock.extraLines.push(clean.trim());
-        } else if (clean.trim() === \'\' && currentBlock && currentBlock.frames.length > 0) {
+        } else if (clean.trim() === '' && currentBlock && currentBlock.frames.length > 0) {
             blocks.push(currentBlock);
             currentBlock = null;
         }
@@ -467,7 +468,7 @@ function parseValgrind(txt) {
     // Deduplicate by type + first frame
     const seen = new Set();
     blocks.forEach(b => {
-        const key = b.type + \'|\' + (b.frames[0] || \'\');
+        const key = b.type + '|' + (b.frames[0] || '');
         if (seen.has(key)) return;
         seen.add(key);
         parsedErrors.push({
@@ -475,24 +476,24 @@ function parseValgrind(txt) {
             severity: classifyValgrindError(b.type),
             frames:   b.frames,
             extra:    b.extraLines,
-            source:   \'valgrind\'
+            source:   'valgrind'
         });
     });
 
     // Parse leaks from HEAP SUMMARY
-    const leakRegions = txt.match(/LEAK SUMMARY:[\\s\\S]*?(?=\\n\\n|ERROR SUMMARY|$)/gi);
+    const leakRegions = txt.match(/LEAK SUMMARY:[\s\S]*?(?=\n\n|ERROR SUMMARY|$)/gi);
     const leakTypes = [
-        { key: \'definitely lost\',  type: \'definitely\' },
-        { key: \'indirectly lost\',  type: \'indirectly\' },
-        { key: \'possibly lost\',    type: \'possibly\'   },
-        { key: \'still reachable\',  type: \'reachable\'  },
+        { key: 'definitely lost',  type: 'definitely' },
+        { key: 'indirectly lost',  type: 'indirectly' },
+        { key: 'possibly lost',    type: 'possibly'   },
+        { key: 'still reachable',  type: 'reachable'  },
     ];
     if (leakRegions) {
         leakRegions.forEach(region => {
             leakTypes.forEach(lt => {
-                const rx = new RegExp(lt.key + \':\\\\s+([\\\\d,]+) bytes in ([\\\\d,]+) blocks\', \'i\');
+                const rx = new RegExp(lt.key + ':\\\\s+([\\\\d,]+) bytes in ([\\\\d,]+) blocks', 'i');
                 const m = region.match(rx);
-                if (m && m[1] !== \'0\') {
+                if (m && m[1] !== '0') {
                     parsedLeaks.push({
                         leakType: lt.type,
                         bytes:    m[1],
@@ -505,15 +506,15 @@ function parseValgrind(txt) {
     }
 
     // Also parse individual leak blocks
-    const leakBlockRx = /==\\d+==\\s+(\\d+(?:,\\d+)?) bytes in (\\d+) blocks are (definitely|indirectly|possibly|still reachable) lost[\\s\\S]*?(?=\\n==\\d+==\\s*\\n|$)/gi;
+    const leakBlockRx = /==\d+==\s+(\d+(?:,\d+)?) bytes in (\d+) blocks are (definitely|indirectly|possibly|still reachable) lost[\s\S]*?(?=\n==\d+==\s*\n|$)/gi;
     let lm;
     while ((lm = leakBlockRx.exec(txt)) !== null) {
         const frames = [];
         const block = lm[0];
-        const frameLines = block.match(/(?:at|by) 0x[0-9A-Fa-f]+:[^\\n]+/g) || [];
-        frameLines.forEach(f => frames.push(f.replace(/^==\\d+==\\s*/, \'\')));
+        const frameLines = block.match(/(?:at|by) 0x[0-9A-Fa-f]+:[^\n]+/g) || [];
+        frameLines.forEach(f => frames.push(f.replace(/^==\d+==\s*/, '')));
         parsedLeaks.push({
-            leakType: lm[3].toLowerCase().replace(\' \',\'_\'),
+            leakType: lm[3].toLowerCase().replace(' ','_'),
             bytes:    lm[1],
             blocks:   lm[2],
             frames:   frames
@@ -522,12 +523,12 @@ function parseValgrind(txt) {
 }
 
 function classifyValgrindError(type) {
-    if (type.startsWith(\'Invalid write\'))  return \'critical\';
-    if (type.startsWith(\'Invalid read\'))   return \'high\';
-    if (type.startsWith(\'Invalid free\'))   return \'critical\';
-    if (type.startsWith(\'Mismatched\'))     return \'critical\';
-    if (type.startsWith(\'Use of uninitialised\') || type.startsWith(\'Conditional\')) return \'warning\';
-    return \'info\';
+    if (type.startsWith('Invalid write'))  return 'critical';
+    if (type.startsWith('Invalid read'))   return 'high';
+    if (type.startsWith('Invalid free'))   return 'critical';
+    if (type.startsWith('Mismatched'))     return 'critical';
+    if (type.startsWith('Use of uninitialised') || type.startsWith('Conditional')) return 'warning';
+    return 'info';
 }
 
 // ============================================================
@@ -536,14 +537,14 @@ function classifyValgrindError(type) {
 function parseAsan(txt) {
     const asanBlocks = txt.split(/(?=ERROR: AddressSanitizer)/);
     asanBlocks.forEach(block => {
-        if (!block.includes(\'AddressSanitizer\')) return;
+        if (!block.includes('AddressSanitizer')) return;
 
-        const titleMatch = block.match(/ERROR: AddressSanitizer: ([^\\n]+)/);
+        const titleMatch = block.match(/ERROR: AddressSanitizer: ([^\n]+)/);
         if (!titleMatch) return;
 
         const errorType = titleMatch[1].trim();
         const frames = [];
-        const frameLines = block.match(/#\\d+\\s+0x[0-9a-f]+[^\\n]*/g) || [];
+        const frameLines = block.match(/#\d+\s+0x[0-9a-f]+[^\n]*/g) || [];
         frameLines.forEach(f => frames.push(f.trim()));
 
         parsedErrors.push({
@@ -551,20 +552,20 @@ function parseAsan(txt) {
             severity: classifyAsanError(errorType),
             frames:   frames,
             extra:    [],
-            source:   \'asan\'
+            source:   'asan'
         });
     });
 
     // ASan leaks
     const leakBlocks = txt.split(/(?=Direct leak|Indirect leak)/);
     leakBlocks.forEach(block => {
-        const m = block.match(/(Direct|Indirect) leak of (\\d+) byte\\(s\\) in (\\d+) object/);
+        const m = block.match(/(Direct|Indirect) leak of (\d+) byte\(s\) in (\d+) object/);
         if (!m) return;
         const frames = [];
-        const frameLines = block.match(/#\\d+\\s+0x[0-9a-f]+[^\\n]*/g) || [];
+        const frameLines = block.match(/#\d+\s+0x[0-9a-f]+[^\n]*/g) || [];
         frameLines.slice(0,8).forEach(f => frames.push(f.trim()));
         parsedLeaks.push({
-            leakType:  m[1].toLowerCase() === \'direct\' ? \'definitely\' : \'indirectly\',
+            leakType:  m[1].toLowerCase() === 'direct' ? 'definitely' : 'indirectly',
             bytes:     m[2],
             blocks:    m[3],
             frames:    frames
@@ -573,12 +574,12 @@ function parseAsan(txt) {
 }
 
 function classifyAsanError(type) {
-    if (type.includes(\'heap-use-after-free\') || type.includes(\'use-after-free\')) return \'critical\';
-    if (type.includes(\'heap-buffer-overflow\') || type.includes(\'stack-buffer-overflow\')) return \'critical\';
-    if (type.includes(\'double-free\'))   return \'critical\';
-    if (type.includes(\'null-dereference\')) return \'high\';
-    if (type.includes(\'use-after-return\')) return \'high\';
-    return \'warning\';
+    if (type.includes('heap-use-after-free') || type.includes('use-after-free')) return 'critical';
+    if (type.includes('heap-buffer-overflow') || type.includes('stack-buffer-overflow')) return 'critical';
+    if (type.includes('double-free'))   return 'critical';
+    if (type.includes('null-dereference')) return 'high';
+    if (type.includes('use-after-return')) return 'high';
+    return 'warning';
 }
 
 // ============================================================
@@ -592,21 +593,21 @@ function renderAll() {
 }
 
 function updateStats() {
-    const critical = parsedErrors.filter(e => e.severity === \'critical\').length;
-    const high     = parsedErrors.filter(e => e.severity === \'high\').length;
-    const leaksDef = parsedLeaks.filter(l => l.leakType === \'definitely\').length;
+    const critical = parsedErrors.filter(e => e.severity === 'critical').length;
+    const high     = parsedErrors.filter(e => e.severity === 'high').length;
+    const leaksDef = parsedLeaks.filter(l => l.leakType === 'definitely').length;
     const total    = parsedErrors.length;
 
-    document.getElementById(\'st-critical\').textContent = critical;
-    document.getElementById(\'st-high\').textContent     = high;
-    document.getElementById(\'st-leaks\').textContent    = leaksDef + (leaksDef ? \' blocos\' : \'\');
-    document.getElementById(\'st-total\').textContent    = total + \' erros\';
+    document.getElementById('st-critical').textContent = critical;
+    document.getElementById('st-high').textContent     = high;
+    document.getElementById('st-leaks').textContent    = leaksDef + (leaksDef ? ' blocos' : '');
+    document.getElementById('st-total').textContent    = total + ' erros';
 
-    const src = document.getElementById(\'overviewSummary\');
-    if (!parsedErrors.length && !parsedLeaks.length) { src.innerHTML = \'\'; return; }
+    const src = document.getElementById('overviewSummary');
+    if (!parsedErrors.length && !parsedLeaks.length) { src.innerHTML = ''; return; }
 
-    const overall = critical > 0 ? \'🔴 CRÍTICO\' : high > 0 ? \'🟡 ATENÇÃO\' : \'✅ OK\';
-    const color   = critical > 0 ? \'#c0392b\' : high > 0 ? \'#e67e22\' : \'#27ae60\';
+    const overall = critical > 0 ? '🔴 CRÍTICO' : high > 0 ? '🟡 ATENÇÃO' : '✅ OK';
+    const color   = critical > 0 ? '#c0392b' : high > 0 ? '#e67e22' : '#27ae60';
 
     src.innerHTML = `
       <div style="background:#f8f9fa;border-radius:10px;padding:20px;margin-bottom:10px">
@@ -617,7 +618,7 @@ function updateStats() {
           <tbody>
             <tr><td><span class="badge badge-critical">CRITICAL</span></td><td><strong>${critical}</strong></td><td>Crash imprevisível / corrupção de heap</td></tr>
             <tr><td><span class="badge badge-high">HIGH</span></td><td><strong>${high}</strong></td><td>Comportamento indefinido / crash</td></tr>
-            <tr><td><span class="badge badge-warning">WARNING</span></td><td><strong>${parsedErrors.filter(e=>e.severity===\'warning\').length}</strong></td><td>Lógica incorreta</td></tr>
+            <tr><td><span class="badge badge-warning">WARNING</span></td><td><strong>${parsedErrors.filter(e=>e.severity==='warning').length}</strong></td><td>Lógica incorreta</td></tr>
             <tr><td><span class="badge badge-info">LEAK DEF.</span></td><td><strong>${leaksDef}</strong></td><td>Memória nunca liberada</td></tr>
           </tbody>
         </table>
@@ -625,32 +626,32 @@ function updateStats() {
 }
 
 function renderErrors() {
-    const container = document.getElementById(\'errorsContent\');
-    const filter   = document.getElementById(\'errFilter\').value.toLowerCase();
-    const sevFilter = document.getElementById(\'errSeverity\').value;
-    const sort     = document.getElementById(\'errSort\').value;
+    const container = document.getElementById('errorsContent');
+    const filter   = document.getElementById('errFilter').value.toLowerCase();
+    const sevFilter = document.getElementById('errSeverity').value;
+    const sort     = document.getElementById('errSort').value;
 
     let list = [...parsedErrors];
-    if (filter)                      list = list.filter(e => (e.type + e.frames.join(\' \')).toLowerCase().includes(filter));
-    if (sevFilter !== \'all\')          list = list.filter(e => e.severity === sevFilter);
+    if (filter)                      list = list.filter(e => (e.type + e.frames.join(' ')).toLowerCase().includes(filter));
+    if (sevFilter !== 'all')          list = list.filter(e => e.severity === sevFilter);
 
     const order = {critical:0, high:1, warning:2, info:3};
-    if (sort === \'severity\') list.sort((a,b) => order[a.severity] - order[b.severity]);
-    if (sort === \'type\')     list.sort((a,b) => a.type.localeCompare(b.type));
-    if (sort === \'func\')     list.sort((a,b) => (a.frames[0]||\'z\').localeCompare(b.frames[0]||\'z\'));
+    if (sort === 'severity') list.sort((a,b) => order[a.severity] - order[b.severity]);
+    if (sort === 'type')     list.sort((a,b) => a.type.localeCompare(b.type));
+    if (sort === 'func')     list.sort((a,b) => (a.frames[0]||'z').localeCompare(b.frames[0]||'z'));
 
     if (!list.length) {
-        container.innerHTML = \'<div class="empty-state"><div class="icon">✅</div><p>Nenhum erro encontrado com esses filtros</p></div>\';
+        container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nenhum erro encontrado com esses filtros</p></div>';
         return;
     }
 
-    const sevLabel = { critical:\'🔴 CRITICAL\', high:\'🟡 HIGH\', warning:\'⚠️ WARNING\', info:\'ℹ️ INFO\' };
-    const badgeClass = { critical:\'badge-critical\', high:\'badge-high\', warning:\'badge-warning\', info:\'badge-info\' };
+    const sevLabel = { critical:'🔴 CRITICAL', high:'🟡 HIGH', warning:'⚠️ WARNING', info:'ℹ️ INFO' };
+    const badgeClass = { critical:'badge-critical', high:'badge-high', warning:'badge-warning', info:'badge-info' };
 
     container.innerHTML = list.map((e, i) => {
-        const firstFunc = extractFuncName(e.frames[0] || \'\');
-        const stackHtml = e.frames.map(f => formatFrame(f)).join(\'\\n\');
-        const extraHtml = e.extra.map(x => `<div style="margin-top:6px;color:#555;font-size:0.9em">${escHtml(x)}</div>`).join(\'\');
+        const firstFunc = extractFuncName(e.frames[0] || '');
+        const stackHtml = e.frames.map(f => formatFrame(f)).join('\n');
+        const extraHtml = e.extra.map(x => `<div style="margin-top:6px;color:#555;font-size:0.9em">${escHtml(x)}</div>`).join('');
 
         return `
         <div class="error-card severity-${e.severity}">
@@ -662,42 +663,42 @@ function renderErrors() {
           </div>
           <div class="error-body">
             <strong>Stack trace:</strong>
-            <div class="stack-trace">${stackHtml || \'(sem frames)\'}</div>
+            <div class="stack-trace">${stackHtml || '(sem frames)'}</div>
             ${extraHtml}
             <div style="margin-top:10px;font-size:0.82em;color:#888">Fonte: ${e.source.toUpperCase()}</div>
           </div>
         </div>`;
-    }).join(\'\');
+    }).join('');
 }
 
 function renderLeaks() {
-    const container = document.getElementById(\'leaksContent\');
-    const filter    = document.getElementById(\'leakFilter\').value.toLowerCase();
-    const typeF     = document.getElementById(\'leakType\').value;
+    const container = document.getElementById('leaksContent');
+    const filter    = document.getElementById('leakFilter').value.toLowerCase();
+    const typeF     = document.getElementById('leakType').value;
 
     let list = [...parsedLeaks];
-    if (typeF !== \'all\') list = list.filter(l => l.leakType === typeF || l.leakType === typeF.replace(\'-\',\'_\'));
-    if (filter) list = list.filter(l => (l.leakType + l.frames.join(\' \')).toLowerCase().includes(filter));
+    if (typeF !== 'all') list = list.filter(l => l.leakType === typeF || l.leakType === typeF.replace('-','_'));
+    if (filter) list = list.filter(l => (l.leakType + l.frames.join(' ')).toLowerCase().includes(filter));
 
     if (!list.length) {
-        container.innerHTML = \'<div class="empty-state"><div class="icon">✅</div><p>Nenhum leak encontrado</p></div>\';
+        container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nenhum leak encontrado</p></div>';
         return;
     }
 
     const leakColors = {
-        definitely: \'critical\', indirectly: \'high\',
-        possibly: \'warning\',  reachable: \'info\',
-        \'definitely_lost\': \'critical\', \'still_reachable\': \'info\'
+        definitely: 'critical', indirectly: 'high',
+        possibly: 'warning',  reachable: 'info',
+        'definitely_lost': 'critical', 'still_reachable': 'info'
     };
     const leakLabel = {
-        definitely: \'Definitely Lost\', indirectly: \'Indirectly Lost\',
-        possibly: \'Possibly Lost\', reachable: \'Still Reachable\'
+        definitely: 'Definitely Lost', indirectly: 'Indirectly Lost',
+        possibly: 'Possibly Lost', reachable: 'Still Reachable'
     };
 
     container.innerHTML = list.map((l, i) => {
-        const sev = leakColors[l.leakType] || \'info\';
+        const sev = leakColors[l.leakType] || 'info';
         const label = leakLabel[l.leakType] || l.leakType;
-        const stackHtml = l.frames.map(f => formatFrame(f)).join(\'\\n\');
+        const stackHtml = l.frames.map(f => formatFrame(f)).join('\n');
         return `
         <div class="error-card severity-${sev}">
           <div class="error-card-header" onclick="toggleCard(this)">
@@ -706,31 +707,31 @@ function renderLeaks() {
             <span style="color:#aaa;font-size:1.2em">▼</span>
           </div>
           <div class="error-body">
-            ${l.frames.length ? `<strong>Alocado em:</strong><div class="stack-trace">${stackHtml}</div>` : \'<p style="color:#888">Sem stack trace disponível</p>\'}
+            ${l.frames.length ? `<strong>Alocado em:</strong><div class="stack-trace">${stackHtml}</div>` : '<p style="color:#888">Sem stack trace disponível</p>'}
           </div>
         </div>`;
-    }).join(\'\');
+    }).join('');
 }
 
 function renderSummaryTable() {
-    const container = document.getElementById(\'summaryContent\');
-    if (!parsedErrors.length) { container.innerHTML = \'<div class="empty-state"><div class="icon">📋</div><p>Carregue um log</p></div>\'; return; }
+    const container = document.getElementById('summaryContent');
+    if (!parsedErrors.length) { container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Carregue um log</p></div>'; return; }
 
     // Group by type
     const grouped = {};
     parsedErrors.forEach(e => {
-        const key = e.type.split(\'of\')[0].trim().split(\'in\')[0].trim();
+        const key = e.type.split('of')[0].trim().split('in')[0].trim();
         if (!grouped[key]) grouped[key] = { severity: e.severity, count: 0, funcs: new Set() };
         grouped[key].count++;
-        const f = extractFuncName(e.frames[0] || \'\');
+        const f = extractFuncName(e.frames[0] || '');
         if (f) grouped[key].funcs.add(f);
     });
 
     const order = {critical:0, high:1, warning:2, info:3};
     const rows = Object.entries(grouped).sort((a,b) => order[a[1].severity] - order[b[1].severity]);
 
-    const badgeClass = { critical:\'badge-critical\', high:\'badge-high\', warning:\'badge-warning\', info:\'badge-info\' };
-    const sevLabel   = { critical:\'CRITICAL\', high:\'HIGH\', warning:\'WARNING\', info:\'INFO\' };
+    const badgeClass = { critical:'badge-critical', high:'badge-high', warning:'badge-warning', info:'badge-info' };
+    const sevLabel   = { critical:'CRITICAL', high:'HIGH', warning:'WARNING', info:'INFO' };
 
     const maxCount = Math.max(...rows.map(r => r[1].count));
 
@@ -744,11 +745,11 @@ function renderSummaryTable() {
               <td><span class="badge ${badgeClass[data.severity]}">${sevLabel[data.severity]}</span></td>
               <td>
                 <strong>${data.count}</strong>
-                <div class="bar-wrap"><div class="bar-fill bar-${data.severity === \'critical\' ? \'critical\' : data.severity === \'high\' ? \'warning\' : \'info\'}"
+                <div class="bar-wrap"><div class="bar-fill bar-${data.severity === 'critical' ? 'critical' : data.severity === 'high' ? 'warning' : 'info'}"
                   style="width:${Math.round(data.count/maxCount*100)}%">${data.count}</div></div>
               </td>
-              <td style="font-size:0.85em;color:#555">${[...data.funcs].slice(0,3).join(\', \')}</td>
-            </tr>`).join(\'\')}
+              <td style="font-size:0.85em;color:#555">${[...data.funcs].slice(0,3).join(', ')}</td>
+            </tr>`).join('')}
         </tbody>
       </table>`;
 }
@@ -759,9 +760,9 @@ function renderSummaryTable() {
 function extractFuncName(frame) {
     // Valgrind: "at 0xABC: FuncName (file.cpp:42)"
     // ASan:     "#0 0x123 in FuncName file.cpp:42"
-    let m = frame.match(/(?:at|by) 0x[0-9a-fA-F]+: ([^(\\n]+)/);
+    let m = frame.match(/(?:at|by) 0x[0-9a-fA-F]+: ([^(\n]+)/);
     if (m) return m[1].trim().substring(0, 60);
-    m = frame.match(/in ([^\\s(]+)/);
+    m = frame.match(/in ([^\s(]+)/);
     if (m) return m[1].trim().substring(0, 60);
     return frame.substring(0, 50);
 }
@@ -772,39 +773,39 @@ function formatFrame(frame) {
     frame = frame.replace(/(at|by)/, `<span class="stack-line-key">$1</span>`);
     frame = frame.replace(/(0x[0-9a-fA-F]+)/, `<span class="stack-line-addr">$1</span>`);
     // func name between : and (
-    frame = frame.replace(/: ([^(\\n<]+)/, `: <span class="stack-line-func">$1</span>`);
+    frame = frame.replace(/: ([^(\n<]+)/, `: <span class="stack-line-func">$1</span>`);
     // file path in parens
-    frame = frame.replace(/\\(([^)]+)\\)/, `(<span class="stack-line-file">$1</span>)`);
+    frame = frame.replace(/\(([^)]+)\)/, `(<span class="stack-line-file">$1</span>)`);
     return frame;
 }
 
 function escHtml(str) {
     return String(str)
-        .replace(/&/g,\'&amp;\').replace(/</g,\'&lt;\')
-        .replace(/>/g,\'&gt;\').replace(/"/g,\'&quot;\');
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function toggleCard(header) {
     const body = header.nextElementSibling;
-    const arrow = header.querySelector(\'span:last-child\');
-    body.classList.toggle(\'open\');
-    arrow.textContent = body.classList.contains(\'open\') ? \'▲\' : \'▼\';
+    const arrow = header.querySelector('span:last-child');
+    body.classList.toggle('open');
+    arrow.textContent = body.classList.contains('open') ? '▲' : '▼';
 }
 
 function switchTab(name, el) {
-    document.querySelectorAll(\'.tab\').forEach(t => t.classList.remove(\'active\'));
-    document.querySelectorAll(\'.tab-content\').forEach(c => c.classList.remove(\'active\'));
-    el.classList.add(\'active\');
-    document.getElementById(name).classList.add(\'active\');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(name).classList.add('active');
 }
 
 // Live filters
-document.addEventListener(\'DOMContentLoaded\', () => {
-    document.getElementById(\'errFilter\').addEventListener(\'input\', renderErrors);
-    document.getElementById(\'errSeverity\').addEventListener(\'change\', renderErrors);
-    document.getElementById(\'errSort\').addEventListener(\'change\', renderErrors);
-    document.getElementById(\'leakFilter\').addEventListener(\'input\', renderLeaks);
-    document.getElementById(\'leakType\').addEventListener(\'change\', renderLeaks);
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('errFilter').addEventListener('input', renderErrors);
+    document.getElementById('errSeverity').addEventListener('change', renderErrors);
+    document.getElementById('errSort').addEventListener('change', renderErrors);
+    document.getElementById('leakFilter').addEventListener('input', renderLeaks);
+    document.getElementById('leakType').addEventListener('change', renderLeaks);
 });
 </script>
 </body>
