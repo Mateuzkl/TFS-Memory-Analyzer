@@ -1,1452 +1,232 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Memory Analyzer — Valgrind &amp; ASan Viewer</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-:root {
-    --bg:  #0b0b12; --bg2: #111119; --bg3: #1a1a2e; --card: #14141e;
-    --border: #252540; --text: #e8e8f0; --muted: #8888a8;
-    --purple: #8b5cf6; --purple2: #a78bfa; --purple3: #c4b5fd;
-    --dark-purple: #2d0b6e; --deep: #0d0221;
-    --orange: #f97316; --green: #22c55e; --red: #ef4444;
-    --blue: #3b82f6; --cyan: #06b6d4; --yellow: #eab308;
-}
-*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-html { scroll-behavior:smooth; }
-body {
-    font-family:'Inter',system-ui,sans-serif;
-    background:var(--bg); color:var(--text);
-    line-height:1.75; overflow-x:hidden; min-height:100vh;
-}
-
-/* ── SCROLLBAR ─────────────────────────────────── */
-::-webkit-scrollbar { width:6px; height:6px; }
-::-webkit-scrollbar-track { background:var(--bg); }
-::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
-::-webkit-scrollbar-thumb:hover { background:var(--purple); }
-
-/* ── HERO ──────────────────────────────────────── */
-.hero-wave {
-    position:relative;
-    background:linear-gradient(135deg, var(--deep) 0%, var(--dark-purple) 40%, #5b1fa8 70%, var(--purple) 100%);
-    padding:64px 24px 90px;
-    text-align:center; overflow:hidden;
-}
-.hero-wave::after {
-    content:''; position:absolute; bottom:-2px; left:0; width:100%; height:72px;
-    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 100'%3E%3Cpath fill='%230b0b12' d='M0,40 C360,100 1080,0 1440,60 L1440,100 L0,100 Z'/%3E%3C/svg%3E") no-repeat bottom center;
-    background-size:cover;
-}
-.hero-glow {
-    position:absolute; top:-50%; left:50%; transform:translateX(-50%);
-    width:700px; height:700px; border-radius:50%;
-    background:radial-gradient(circle, rgba(139,92,246,.18) 0%, transparent 70%);
-    pointer-events:none; animation:pulse 6s ease-in-out infinite;
-}
-@keyframes pulse { 0%,100%{opacity:.6;transform:translateX(-50%) scale(1)} 50%{opacity:1;transform:translateX(-50%) scale(1.15)} }
-
-.hero-wave h1 {
-    position:relative; z-index:1;
-    font-size:clamp(2em,5vw,3.4em); font-weight:900; color:#fff;
-    text-shadow:0 4px 20px rgba(0,0,0,.4); margin-bottom:8px; letter-spacing:-1px;
-}
-.hero-wave .hero-sub {
-    position:relative; z-index:1;
-    font-size:clamp(.9em,2vw,1.1em); color:rgba(255,255,255,.75);
-    margin-bottom:24px; font-weight:400;
-}
-.hero-badges { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; position:relative; z-index:1; }
-.hb {
-    padding:5px 16px; border-radius:20px; font-size:.78em; font-weight:700;
-    letter-spacing:.4px; background:rgba(255,255,255,.1); backdrop-filter:blur(8px);
-    border:1px solid rgba(255,255,255,.2); color:#fff;
-}
-.hb.v { border-color:var(--purple3); color:var(--purple3); }
-.hb.a { border-color:var(--orange);  color:var(--orange); }
-.hb.m { border-color:var(--cyan);    color:#67e8f9; }
-.hb.l { border-color:var(--green);   color:#86efac; }
-
-/* ── NAV ───────────────────────────────────────── */
-nav {
-    position:sticky; top:0; z-index:999;
-    background:rgba(11,11,18,.9); backdrop-filter:blur(20px);
-    border-bottom:1px solid var(--border); padding:0 24px;
-}
-.nav-in { max-width:1200px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; height:52px; }
-.nav-brand { font-weight:800; font-size:1em; color:var(--purple2); text-decoration:none; display:flex; gap:6px; align-items:center; }
-.nav-brand small { color:var(--muted); font-weight:400; font-size:.75em; }
-
-/* ── TABS ──────────────────────────────────────── */
-.tabs-wrap {
-    background:var(--bg2);
-    border-bottom:1px solid var(--border);
-    display:flex; overflow-x:auto; padding:0 24px;
-    gap:4px;
-}
-.tab {
-    padding:14px 20px; cursor:pointer; border:none;
-    background:transparent; font-family:'Inter',sans-serif;
-    font-size:.85em; font-weight:600; color:var(--muted);
-    transition:all .25s; border-bottom:2px solid transparent;
-    margin-bottom:-1px; white-space:nowrap; letter-spacing:.2px;
-}
-.tab:hover { color:var(--text); background:rgba(139,92,246,.07); }
-.tab.active { color:var(--purple2); border-bottom-color:var(--purple); }
-
-/* ── TAB CONTENT ───────────────────────────────── */
-.tab-content { display:none; animation:fadeIn .3s ease; }
-.tab-content.active { display:block; }
-@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
-
-/* ── WRAPPER ───────────────────────────────────── */
-.wrap { max-width:1200px; margin:0 auto; padding:32px 24px 60px; }
-
-/* ── UPLOAD ZONE ───────────────────────────────── */
-.upload-zone {
-    border:2px dashed var(--border); border-radius:14px;
-    padding:40px 24px; text-align:center; margin-bottom:28px;
-    background:rgba(139,92,246,.03);
-    transition:all .3s; cursor:pointer;
-}
-.upload-zone:hover { border-color:var(--purple); background:rgba(139,92,246,.06); }
-.upload-zone h2 { font-size:1.15em; font-weight:700; margin-bottom:8px; color:var(--purple2); }
-.upload-zone p  { font-size:.88em; color:var(--muted); margin-bottom:20px; line-height:1.6; }
-.upload-zone input[type="file"] { display:none; }
-.btn-upload {
-    display:inline-flex; align-items:center; gap:8px;
-    background:linear-gradient(135deg,#7c3aed,#a78bfa); color:#fff;
-    padding:11px 26px; border:none; border-radius:10px;
-    font-size:.9em; font-weight:700; cursor:pointer;
-    font-family:inherit; transition:all .25s; text-decoration:none;
-}
-.btn-upload:hover { transform:translateY(-2px); box-shadow:0 8px 25px rgba(139,92,246,.4); }
-
-/* ── STATS GRID ────────────────────────────────── */
-.stats-grid {
-    display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
-    gap:14px; margin-bottom:28px;
-}
-.stat-card {
-    padding:20px 22px; border-radius:14px;
-    border:1px solid var(--border); background:var(--card);
-    transition:all .25s; position:relative; overflow:hidden;
-}
-.stat-card::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:3px;
-    border-radius:14px 14px 0 0;
-}
-.stat-card:hover { transform:translateY(-3px); border-color:rgba(139,92,246,.35); }
-.stat-card.critical::before { background:linear-gradient(90deg,#ef4444,#f97316); }
-.stat-card.warning::before  { background:linear-gradient(90deg,#eab308,#f97316); }
-.stat-card.info::before     { background:linear-gradient(90deg,#3b82f6,#06b6d4); }
-.stat-card.ok::before       { background:linear-gradient(90deg,#22c55e,#06b6d4); }
-.stat-card h3 { font-size:.72em; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin-bottom:10px; font-weight:600; }
-.stat-card.critical h3 { color:#fca5a5; }
-.stat-card.warning h3  { color:#fde68a; }
-.stat-card.info h3     { color:#93c5fd; }
-.stat-card.ok h3       { color:#86efac; }
-.stat-card .value { font-size:2.4em; font-weight:900; line-height:1; }
-.stat-card.critical .value { color:#ef4444; }
-.stat-card.warning .value  { color:#eab308; }
-.stat-card.info .value     { color:#3b82f6; }
-.stat-card.ok .value       { color:#22c55e; }
-
-/* ── FILTER BAR ────────────────────────────────── */
-.filter-bar {
-    background:var(--card); border:1px solid var(--border);
-    border-radius:12px; padding:16px 18px; margin-bottom:20px;
-    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
-}
-.filter-bar input,
-.filter-bar select {
-    padding:9px 14px; background:var(--bg3);
-    border:1px solid var(--border); border-radius:8px;
-    font-size:.88em; color:var(--text); flex:1; min-width:180px;
-    font-family:inherit; outline:none; transition:border-color .2s;
-}
-.filter-bar input::placeholder { color:var(--muted); }
-.filter-bar input:focus,
-.filter-bar select:focus { border-color:var(--purple); }
-.filter-bar select option { background:var(--bg3); color:var(--text); }
-
-/* ── BADGES ────────────────────────────────────── */
-.badge {
-    display:inline-block; padding:3px 11px; border-radius:20px;
-    font-size:.72em; font-weight:700; letter-spacing:.5px;
-}
-.badge-critical { background:rgba(239,68,68,.15);  color:#fca5a5; border:1px solid rgba(239,68,68,.3); }
-.badge-high     { background:rgba(234,179,8,.12);   color:#fde68a; border:1px solid rgba(234,179,8,.3); }
-.badge-warning  { background:rgba(249,115,22,.12);  color:#fdba74; border:1px solid rgba(249,115,22,.3); }
-.badge-info     { background:rgba(59,130,246,.12);  color:#93c5fd; border:1px solid rgba(59,130,246,.3); }
-.badge-ok       { background:rgba(34,197,94,.12);   color:#86efac; border:1px solid rgba(34,197,94,.3); }
-
-/* ── ERROR CARDS ───────────────────────────────── */
-.error-card {
-    border-radius:10px; margin-bottom:12px;
-    background:var(--card); border:1px solid var(--border);
-    overflow:hidden; transition:border-color .2s;
-}
-.error-card:hover { border-color:rgba(139,92,246,.25); }
-
-.error-card-header {
-    display:flex; justify-content:space-between; align-items:center;
-    padding:14px 18px; cursor:pointer; user-select:none; gap:12px;
-    border-left:3px solid transparent;
-}
-.error-card.severity-critical .error-card-header { border-left-color:#ef4444; }
-.error-card.severity-high     .error-card-header { border-left-color:#eab308; }
-.error-card.severity-warning  .error-card-header { border-left-color:#f97316; }
-.error-card.severity-info     .error-card-header { border-left-color:#3b82f6; }
-.error-card.severity-leak     .error-card-header { border-left-color:#a78bfa; }
-.error-card-header:hover { background:rgba(255,255,255,.025); }
-
-.error-title { font-weight:600; font-size:.9em; flex:1; color:var(--text); }
-.error-meta  { font-size:.8em; color:var(--muted); font-family:'JetBrains Mono',monospace; }
-.error-arrow { color:var(--muted); font-size:1em; transition:transform .2s; }
-
-.error-body { display:none; padding:16px 18px; background:rgba(0,0,0,.2); border-top:1px solid var(--border); }
-.error-body.open { display:block; }
-
-/* ── STACK TRACE ───────────────────────────────── */
-.stack-trace {
-    background:#080810; color:#d4d4d4; padding:14px 16px;
-    border-radius:8px; font-family:'JetBrains Mono',monospace;
-    font-size:.78em; overflow-x:auto; line-height:1.7;
-    white-space:pre-wrap; margin-top:10px;
-    border:1px solid var(--border);
-}
-.stack-line-key  { color:#818cf8; }
-.stack-line-func { color:#fbbf24; font-weight:600; }
-.stack-line-file { color:#fb923c; }
-.stack-line-addr { color:#6ee7b7; }
-
-/* ── SUMMARY TABLE ─────────────────────────────── */
-.summary-table { width:100%; border-collapse:collapse; margin-top:16px; }
-.summary-table th {
-    background:rgba(139,92,246,.1); text-align:left; padding:11px 14px;
-    font-size:.75em; text-transform:uppercase; letter-spacing:.8px;
-    color:var(--purple3); font-weight:700; border-bottom:1px solid var(--border);
-}
-.summary-table td { padding:11px 14px; border-bottom:1px solid rgba(255,255,255,.04); font-size:.88em; }
-.summary-table tr:last-child td { border-bottom:none; }
-.summary-table tr:hover td { background:rgba(255,255,255,.025); }
-
-/* ── PROGRESS BARS ─────────────────────────────── */
-.bar-wrap  { background:rgba(255,255,255,.06); border-radius:6px; height:14px; overflow:hidden; margin-top:5px; }
-.bar-fill  { height:100%; border-radius:6px; display:flex; align-items:center; justify-content:flex-end; padding-right:6px; font-size:.68em; color:#fff; font-weight:700; }
-.bar-critical { background:linear-gradient(90deg,#7f1d1d,#ef4444); }
-.bar-warning  { background:linear-gradient(90deg,#78350f,#f97316); }
-.bar-info     { background:linear-gradient(90deg,#1e3a8a,#3b82f6); }
-
-/* ── OVERVIEW SUMMARY BOX ──────────────────────── */
-.overview-box {
-    background:var(--card); border:1px solid var(--border);
-    border-radius:14px; padding:22px; margin-bottom:16px;
-}
-.overview-box h3 { font-size:1.05em; font-weight:700; margin-bottom:14px; }
-.overview-box p  { font-size:.88em; color:var(--muted); margin-bottom:10px; }
-.overview-box p strong { color:var(--text); }
-
-/* ── HELP BOXES ────────────────────────────────── */
-.help-section { display:grid; gap:16px; }
-.help-box {
-    background:var(--card); border:1px solid var(--border);
-    border-radius:14px; padding:22px;
-}
-.help-box h3 { font-size:.95em; font-weight:700; color:var(--purple2); margin-bottom:14px; }
-.help-box ul  { list-style:none; display:flex; flex-direction:column; gap:8px; }
-.help-box ul li { font-size:.88em; color:var(--muted); line-height:1.6; padding-left:1.2em; position:relative; }
-.help-box ul li::before { content:'›'; position:absolute; left:0; color:var(--purple); }
-.help-box ul li strong { color:var(--text); }
-.help-box ul li code {
-    background:rgba(139,92,246,.12); color:var(--purple3);
-    padding:.1em .45em; border-radius:4px; font-family:'JetBrains Mono',monospace; font-size:.88em;
-}
-.code-block {
-    background:#080810; color:#d4d4d4; padding:14px 16px;
-    border-radius:8px; font-family:'JetBrains Mono',monospace;
-    font-size:.8em; overflow-x:auto; margin:12px 0;
-    border:1px solid var(--border); line-height:1.7;
-}
-
-/* ── GUIDE TAB ─────────────────────────────────── */
-.guide-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; margin:16px 0; }
-.guide-card {
-    background:var(--card); border:1px solid var(--border); border-radius:12px;
-    padding:18px; transition:border-color .2s;
-}
-.guide-card:hover { border-color:rgba(139,92,246,.3); }
-.guide-card .gc-icon { font-size:1.5em; margin-bottom:10px; }
-.guide-card h4 { font-size:.9em; font-weight:700; color:var(--text); margin-bottom:6px; }
-.guide-card p { font-size:.82em; color:var(--muted); margin:0; }
-.guide-section { margin-bottom:36px; }
-.guide-section h3 {
-    font-size:1.05em; font-weight:700; color:var(--purple2);
-    margin-bottom:14px; padding-bottom:10px;
-    border-bottom:1px solid var(--border);
-    display:flex; align-items:center; gap:8px;
-}
-.guide-callout {
-    display:flex; gap:14px; padding:16px 18px; border-radius:10px;
-    margin:14px 0; border-left:3px solid;
-}
-.guide-callout.info  { background:rgba(59,130,246,.07);  border-color:var(--blue); }
-.guide-callout.warn  { background:rgba(234,179,8,.07);   border-color:var(--yellow); }
-.guide-callout.ok    { background:rgba(34,197,94,.07);   border-color:var(--green); }
-.guide-callout.danger{ background:rgba(239,68,68,.07);   border-color:var(--red); }
-.guide-callout .gc-icon { font-size:1.2em; flex-shrink:0; margin-top:1px; }
-.guide-callout .gc-body { flex:1; }
-.guide-callout .gc-body strong { display:block; margin-bottom:4px; font-size:.8em; text-transform:uppercase; letter-spacing:.5px; }
-.guide-callout.info  .gc-body strong { color:var(--blue); }
-.guide-callout.warn  .gc-body strong { color:var(--yellow); }
-.guide-callout.ok    .gc-body strong { color:var(--green); }
-.guide-callout.danger .gc-body strong { color:var(--red); }
-.guide-callout .gc-body p { margin:0; font-size:.85em; }
-.guide-table { width:100%; border-collapse:collapse; margin:14px 0; font-size:.85em; }
-.guide-table th {
-    background:rgba(139,92,246,.08); text-align:left; padding:10px 14px;
-    font-size:.72em; text-transform:uppercase; letter-spacing:.7px;
-    color:var(--purple3); font-weight:700; border-bottom:1px solid var(--border);
-}
-.guide-table td { padding:10px 14px; border-bottom:1px solid rgba(255,255,255,.04); color:var(--muted); vertical-align:top; }
-.guide-table td:first-child { color:var(--text); font-family:'JetBrains Mono',monospace; font-size:.85em; font-weight:500; }
-.guide-table tr:hover td { background:rgba(255,255,255,.02); }
-.guide-badge {
-    display:inline-block; border-radius:4px; padding:2px 8px;
-    font-size:.7em; font-weight:700;
-}
-.guide-badge.high   { background:rgba(239,68,68,.15);  color:#fca5a5; }
-.guide-badge.medium { background:rgba(234,179,8,.15);  color:#fde68a; }
-.guide-badge.low    { background:rgba(34,197,94,.15);   color:#86efac; }
-.guide-badge.gb-info{ background:rgba(59,130,246,.15);  color:#93c5fd; }
-.leak-types-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:14px 0; }
-.leak-type-card {
-    background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px;
-}
-.leak-type-card .lt-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-.leak-type-card .lt-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-.leak-type-card h4 { font-size:.82em; font-weight:700; }
-.leak-type-card p { font-size:.78em; margin:0; color:var(--muted); }
-.guide-flow { display:flex; flex-direction:column; gap:0; margin:16px 0; }
-.guide-flow-item { display:flex; align-items:flex-start; gap:14px; padding:12px 0; }
-.guide-flow-line { display:flex; flex-direction:column; align-items:center; min-width:28px; }
-.guide-flow-dot {
-    width:12px; height:12px; border-radius:50%; border:2px solid; flex-shrink:0;
-}
-.guide-flow-conn { width:2px; flex:1; min-height:24px; background:var(--border); margin:2px 0; }
-.guide-flow-item:last-child .guide-flow-conn { display:none; }
-.guide-flow-content h4 { font-size:.88em; font-weight:600; margin-bottom:4px; }
-.guide-flow-content p { font-size:.82em; margin:0; color:var(--muted); }
-@media(max-width:768px) { .leak-types-grid { grid-template-columns:1fr; } }
-
-/* ── EMPTY STATE ───────────────────────────────── */
-.empty-state { text-align:center; padding:60px 20px; color:var(--muted); }
-.empty-state .icon { font-size:3.5em; margin-bottom:14px; opacity:.6; }
-.empty-state p { font-size:.95em; }
-
-/* ── SECTION HEADER ────────────────────────────── */
-.sh { padding:0 0 20px; }
-.sh h2 { font-size:1.3em; font-weight:700; margin-bottom:4px; }
-.sh p  { font-size:.85em; color:var(--muted); }
-
-/* ── FOOTER ────────────────────────────────────── */
-.footer-wave {
-    width:100%; height:80px; margin-top:40px;
-    background:linear-gradient(0deg, var(--deep) 0%, var(--bg) 100%);
-    clip-path:polygon(0 50%,25% 80%,50% 50%,75% 80%,100% 50%,100% 100%,0 100%);
-}
-footer {
-    background:var(--deep); text-align:center; padding:40px 24px 32px;
-    border-top:1px solid var(--border);
-}
-footer p { color:var(--muted); font-size:.85em; line-height:1.8; }
-footer a { color:var(--purple2); text-decoration:none; font-weight:600; }
-footer a:hover { text-decoration:underline; }
-footer .brand { font-size:1.1em; font-weight:800; color:var(--purple2); margin-bottom:8px; }
-footer .pix {
-    display:inline-block; background:var(--bg3); padding:5px 14px;
-    border-radius:6px; font-family:'JetBrains Mono',monospace;
-    font-size:.78em; color:var(--purple2); margin-top:6px;
-}
-
-@media(max-width:768px) {
-    .tabs-wrap { padding:0 12px; }
-    .wrap { padding:20px 16px 40px; }
-    .filter-bar { flex-direction:column; }
-    .stats-grid { grid-template-columns:1fr 1fr; }
-}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memory Analyzer</title>
+  <meta name="description" content="Visualizador offline para logs de Valgrind e AddressSanitizer.">
+  <link rel="stylesheet" href="./assets/styles.css">
 </head>
 <body>
-
-<!-- ══ HERO ══════════════════════════════════════════════ -->
-<header>
-  <div class="hero-wave">
-    <div class="hero-glow"></div>
-    <h1>🔍 Memory Analyzer</h1>
-    <p class="hero-sub">Valgrind Memcheck &amp; AddressSanitizer Log Viewer</p>
-    <div class="hero-badges">
-      <span class="hb v">Valgrind</span>
-      <span class="hb a">ASan</span>
-      <span class="hb m">Memcheck</span>
-      <span class="hb l">Leak Detection</span>
-    </div>
-  </div>
-</header>
-
-<!-- ══ NAVBAR ════════════════════════════════════════════ -->
-<nav>
-  <div class="nav-in">
-    <a class="nav-brand" href="#">🔍 Memory Analyzer <small>v2.0</small></a>
-  </div>
-</nav>
-
-<!-- ══ TABS ══════════════════════════════════════════════ -->
-<div class="tabs-wrap">
-  <button class="tab active"  onclick="switchTab('overview',this)">📊 Overview</button>
-  <button class="tab"         onclick="switchTab('errors',this)">🚨 Erros</button>
-  <button class="tab"         onclick="switchTab('leaks',this)">💧 Leaks</button>
-  <button class="tab"         onclick="switchTab('summary',this)">📋 Resumo</button>
-  <button class="tab"         onclick="switchTab('help',this)">❓ Como Usar</button>
-  <button class="tab"         onclick="switchTab('guide',this)">📖 Guia Valgrind &amp; ASAN</button>
-</div>
-
-<!-- ══ OVERVIEW ══════════════════════════════════════════ -->
-<div id="overview" class="tab-content active">
-  <div class="wrap">
-
-    <div class="upload-zone" onclick="document.getElementById('logFile').click()">
-      <h2>📁 Carregar Log de Memória</h2>
-      <p>
-        Suporta logs do <strong>Valgrind Memcheck</strong> (.log, .txt) e do
-        <strong>AddressSanitizer</strong> (ASan). Arraste ou clique para selecionar.
-      </p>
-      <input type="file" id="logFile" accept=".log,.txt">
-      <label for="logFile" class="btn-upload" onclick="event.stopPropagation()">
-        📄 Selecionar valgrind.log / asan.log
-      </label>
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-card critical">
-        <h3>🔴 Critical</h3>
-        <div class="value" id="st-critical">—</div>
-      </div>
-      <div class="stat-card warning">
-        <h3>🟡 High</h3>
-        <div class="value" id="st-high">—</div>
-      </div>
-      <div class="stat-card info">
-        <h3>💧 Leaks (todos)</h3>
-        <div class="value" id="st-leaks">—</div>
-      </div>
-      <div class="stat-card ok">
-        <h3>📊 Total (Erros + Leaks)</h3>
-        <div class="value" id="st-total">—</div>
-      </div>
-    </div>
-
-    <div id="overviewSummary"></div>
-  </div>
-</div>
-
-<!-- ══ ERRORS ════════════════════════════════════════════ -->
-<div id="errors" class="tab-content">
-  <div class="wrap">
-    <div class="sh"><h2>🚨 Erros Detectados</h2><p>Invalid reads/writes, use-after-free, double-free e outros.</p></div>
-    <div class="filter-bar">
-      <input  type="text" id="errFilter"   placeholder="🔍 Filtrar por função, tipo...">
-      <select id="errSeverity">
-        <option value="all">Todos os tipos</option>
-        <option value="critical">🔴 Critical</option>
-        <option value="high">🟡 High</option>
-        <option value="warning">⚠️ Warning</option>
-        <option value="info">ℹ️ Info</option>
-      </select>
-      <select id="errSort">
-        <option value="severity">Ordenar por Severidade</option>
-        <option value="type">Ordenar por Tipo</option>
-        <option value="func">Ordenar por Função</option>
-      </select>
-    </div>
-    <div id="errorsContent">
-      <div class="empty-state">
-        <div class="icon">📂</div>
-        <p>Carregue um arquivo de log para visualizar os erros.</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ LEAKS ══════════════════════════════════════════════ -->
-<div id="leaks" class="tab-content">
-  <div class="wrap">
-    <div class="sh"><h2>💧 Memory Leaks</h2><p>Blocos de memória alocados e não liberados.</p></div>
-    <div class="filter-bar">
-      <input  type="text" id="leakFilter" placeholder="🔍 Filtrar por localização...">
-      <select id="leakType">
-        <option value="all">Todos os leaks</option>
-        <option value="definitely">Definitely Lost</option>
-        <option value="indirectly">Indirectly Lost</option>
-        <option value="possibly">Possibly Lost</option>
-        <option value="reachable">Still Reachable</option>
-      </select>
-    </div>
-    <div id="leaksContent">
-      <div class="empty-state">
-        <div class="icon">💧</div>
-        <p>Nenhum leak encontrado ainda.</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ SUMMARY ════════════════════════════════════════════ -->
-<div id="summary" class="tab-content">
-  <div class="wrap">
-    <div class="sh"><h2>📋 Resumo por Tipo</h2><p>Agrupamento de erros por categoria com frequência.</p></div>
-    <div id="summaryContent">
-      <div class="empty-state">
-        <div class="icon">📋</div>
-        <p>Carregue um log para ver o resumo.</p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ HELP ════════════════════════════════════════════════ -->
-<div id="help" class="tab-content">
-  <div class="wrap">
-    <div class="sh"><h2>❓ Como Usar</h2><p>Guia de referência rápida para os formatos suportados.</p></div>
-    <div class="help-section">
-
-      <div class="help-box">
-        <h3>📚 Formatos Suportados</h3>
-        <ul>
-          <li><strong>Valgrind Memcheck</strong> — Gera um <code>.log</code> com erros de memória detalhados e stack traces.</li>
-          <li><strong>AddressSanitizer (ASan)</strong> — Compile com <code>-fsanitize=address</code> e redirecione o stderr para um arquivo.</li>
-        </ul>
-      </div>
-
-      <div class="help-box">
-        <h3>🔧 Comando Recomendado — Valgrind</h3>
-        <div class="code-block">valgrind \<br>
-&nbsp;&nbsp;--tool=memcheck \<br>
-&nbsp;&nbsp;--leak-check=full \<br>
-&nbsp;&nbsp;--show-leak-kinds=all \<br>
-&nbsp;&nbsp;--track-origins=yes \<br>
-&nbsp;&nbsp;--error-exitcode=1 \<br>
-&nbsp;&nbsp;./server 2&gt; valgrind.log</div>
-      </div>
-
-      <div class="help-box">
-        <h3>🔧 Comando Recomendado — ASan</h3>
-        <div class="code-block">cmake .. -DCMAKE_CXX_FLAGS="-fsanitize=address -g" \<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"<br>
-ASAN_OPTIONS=log_path=asan.log ./server</div>
-      </div>
-
-      <div class="help-box">
-        <h3>🎯 Classificação de Severidade</h3>
-        <ul>
-          <li>🔴 <strong>CRITICAL</strong> — Invalid write / use-after-free write: corrompe heap, pode causar crash imprevisível.</li>
-          <li>🟡 <strong>HIGH</strong> — Invalid read: lê memória já liberada, comportamento indefinido.</li>
-          <li>⚠️ <strong>WARNING</strong> — Use of uninitialised value / cond jump: lógica incorreta.</li>
-          <li>💧 <strong>LEAK (definitely lost)</strong> — Memória alocada e nunca liberada.</li>
-          <li>🔵 <strong>LEAK (possibly / indirectly)</strong> — Provável não-problema em processos de longa execução.</li>
-        </ul>
-      </div>
-
-      <div class="help-box">
-        <h3>💡 O que priorizar primeiro</h3>
-        <ul>
-          <li>❌ <strong>Invalid write</strong> em bloco free'd → crash imprevisível + corrupção de dados.</li>
-          <li>❌ <strong>use-after-free</strong> → crash em operações com objetos já destruídos.</li>
-          <li>❌ <strong>heap-buffer-overflow</strong> → leitura/escrita fora dos limites alocados.</li>
-          <li>⚠️ <strong>Definitely lost</strong> crescendo → memory leak real que precisa ser corrigido.</li>
-        </ul>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<!-- ══ GUIDE ══════════════════════════════════════════════ -->
-<div id="guide" class="tab-content">
-  <div class="wrap">
-    <div class="sh"><h2>📖 Guia Valgrind &amp; ASAN</h2><p>Guia completo: do build à leitura do log e correção de leaks no TFS.</p></div>
-
-    <!-- VISÃO GERAL -->
-    <div class="guide-section">
-      <h3>📌 Visão Geral</h3>
-      <p style="color:var(--muted);font-size:.88em;margin-bottom:14px">Memory leaks no TFS causam crescimento contínuo do RSS, degradando performance e podendo derrubar o servidor após horas de uptime.</p>
-      <div class="guide-cards">
-        <div class="guide-card"><div class="gc-icon">🛡️</div><h4>Valgrind Memcheck</h4><p>Detecta leaks com backtrace completo. Sem recompilação especial. 10-50× mais lento.</p></div>
-        <div class="guide-card"><div class="gc-icon">⚡</div><h4>AddressSanitizer (ASAN)</h4><p>Instrumentação em compile-time. ~2× overhead. Detecta use-after-free, stack/heap overflow, leaks.</p></div>
-        <div class="guide-card"><div class="gc-icon">🔎</div><h4>LeakSanitizer (LSAN)</h4><p>Integrado ao ASAN. Relatório detalhado de leaks no encerramento do processo.</p></div>
-        <div class="guide-card"><div class="gc-icon">🎯</div><h4>Estratégia Recomendada</h4><p>ASAN no desenvolvimento (CI/testes), Valgrind para análise profunda de leak específico.</p></div>
-      </div>
-    </div>
-
-    <!-- TIPOS DE LEAK -->
-    <div class="guide-section">
-      <h3>🔍 Tipos de Leak (Valgrind)</h3>
-      <p style="color:var(--muted);font-size:.88em;margin-bottom:14px">Valgrind classifica memória não liberada em categorias. Entender cada uma determina a urgência:</p>
-      <div class="leak-types-grid">
-        <div class="leak-type-card">
-          <div class="lt-head"><div class="lt-dot" style="background:#ef4444"></div><h4>Definitely Lost <span class="guide-badge high">CRÍTICO</span></h4></div>
-          <p>Nenhum ponteiro aponta para o bloco. Memória 100% irrecuperável. <strong style="color:var(--text)">Sempre corrija primeiro.</strong></p>
+  <header class="site-header">
+    <div class="shell">
+      <div class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Offline log viewer</p>
+          <h1>Memory Analyzer</h1>
+          <p class="hero-text">Le o log inteiro, separa loss records, resume heap usage e preserva a saida bruta completa.</p>
         </div>
-        <div class="leak-type-card">
-          <div class="lt-head"><div class="lt-dot" style="background:#eab308"></div><h4>Indirectly Lost <span class="guide-badge medium">ALTO</span></h4></div>
-          <p>Bloco apontado por outro que é "definitely lost". Corrija o pai e este some automaticamente.</p>
-        </div>
-        <div class="leak-type-card">
-          <div class="lt-head"><div class="lt-dot" style="background:#f97316"></div><h4>Possibly Lost <span class="guide-badge medium">MÉDIO</span></h4></div>
-          <p>Ponteiro aponta para o interior do bloco. Pode ser intencional (pointer arithmetic) ou bug.</p>
-        </div>
-        <div class="leak-type-card">
-          <div class="lt-head"><div class="lt-dot" style="background:#22c55e"></div><h4>Still Reachable <span class="guide-badge low">BAIXO</span></h4></div>
-          <p>Ponteiro válido existe, mas free() nunca foi chamado. Comum em singletons/globals. Frequentemente ignorável.</p>
-        </div>
-      </div>
-      <div class="guide-callout warn">
-        <div class="gc-icon">⚠️</div>
-        <div class="gc-body">
-          <strong>Foco no TFS</strong>
-          <p>Priorize <strong style="color:var(--text)">Definitely Lost</strong> e <strong style="color:var(--text)">Indirectly Lost</strong>. "Still Reachable" em singletons como <code style="color:var(--purple3)">g_game</code>, <code style="color:var(--purple3)">g_config</code> é normal.</p>
-        </div>
+        <nav class="hero-nav" aria-label="Atalhos">
+          <a href="#overview-panel">Visao geral</a>
+          <a href="#leak-panel">Loss records</a>
+          <a href="#error-panel">Erros</a>
+          <a href="#raw-panel">Log bruto</a>
+        </nav>
       </div>
     </div>
+  </header>
 
-    <!-- BUILD -->
-    <div class="guide-section">
-      <h3>🔨 Build para Debug</h3>
-      <p style="color:var(--muted);font-size:.88em;margin-bottom:14px">Para backtraces úteis, compile com símbolos de debug (<code style="color:var(--purple3)">-g</code>) e sem otimizações:</p>
-      <div class="code-block"><span style="color:#6ee7b7"># Na raiz do TFS</span>
-mkdir -p build-debug &amp;&amp; cd build-debug
-
-cmake .. <span style="color:#86efac">-DCMAKE_BUILD_TYPE=Debug</span> \
-         <span style="color:#86efac">-DCMAKE_CXX_FLAGS="-g -O0 -fno-omit-frame-pointer"</span> \
-         <span style="color:#86efac">-DCMAKE_LINKER_FLAGS="-rdynamic"</span>
-
-cmake --build . -- -j4</div>
-      <div class="guide-callout info">
-        <div class="gc-icon">💡</div>
-        <div class="gc-body">
-          <strong>Por que -fno-omit-frame-pointer?</strong>
-          <p>Garante que o frame pointer seja mantido na stack, permitindo backtraces completos e precisos pelo Valgrind/ASAN.</p>
+  <main class="shell main-layout">
+    <section class="panel intake-panel" id="input-panel">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Entrada</p>
+          <h2>Carregar log</h2>
         </div>
+        <p class="section-copy">Funciona offline. Voce pode arrastar um arquivo, selecionar um `.log` / `.txt` ou colar o texto inteiro da execucao.</p>
       </div>
-    </div>
 
-    <!-- VALGRIND -->
-    <div class="guide-section">
-      <h3>🛡️ Valgrind Memcheck — Comandos</h3>
-      <p style="color:var(--muted);font-size:.88em;margin-bottom:14px">Comando definitivo para capturar apenas leaks reais (definite) com máximo detalhe:</p>
-      <div class="help-box" style="margin-bottom:14px">
-        <h3 style="font-size:.85em">🎯 Apenas leaks definitivos</h3>
-        <div class="code-block">valgrind \
-  <span style="color:#86efac">--tool=memcheck</span> \
-  <span style="color:#86efac">--leak-check=full</span> \
-  <span style="color:#86efac">--show-leak-kinds=definite</span> \
-  <span style="color:#86efac">--track-origins=yes</span> \
-  <span style="color:#86efac">--num-callers=50</span> \
-  <span style="color:#86efac">--leak-resolution=high</span> \
-  <span style="color:#86efac">--error-limit=no</span> \
-  <span style="color:#86efac">--expensive-definedness-checks=yes</span> \
-  <span style="color:#86efac">--partial-loads-ok=yes</span> \
-  <span style="color:#86efac">--log-file=valgrind-definitive.log</span> \
-  ./tfs</div>
-      </div>
-      <div class="help-box" style="margin-bottom:14px">
-        <h3 style="font-size:.85em">📋 Todos os tipos de leak</h3>
-        <div class="code-block">valgrind \
-  --tool=memcheck \
-  --leak-check=full \
-  <span style="color:#86efac">--show-leak-kinds=all</span> \
-  --track-origins=yes \
-  --num-callers=50 \
-  --leak-resolution=high \
-  --error-limit=no \
-  <span style="color:#86efac">--suppressions=tfs.supp</span> \
-  --log-file=valgrind-full.log \
-  ./tfs</div>
-      </div>
-      <div class="help-box" style="margin-bottom:14px">
-        <h3 style="font-size:.85em">🔥 Detecção de use-after-free</h3>
-        <div class="code-block">valgrind \
-  --tool=memcheck \
-  --leak-check=full \
-  --show-leak-kinds=definite,indirect \
-  --track-origins=yes \
-  --num-callers=50 \
-  <span style="color:#86efac">--undef-value-errors=yes</span> \
-  <span style="color:#86efac">--malloc-fill=0xAA</span> \
-  <span style="color:#86efac">--free-fill=0xDD</span> \
-  --error-limit=no \
-  --log-file=valgrind-uaf.log \
-  ./tfs</div>
-      </div>
-      <div class="guide-callout warn">
-        <div class="gc-icon">🐢</div>
-        <div class="gc-body">
-          <strong>Performance</strong>
-          <p>Valgrind executa o TFS <strong style="color:var(--text)">10–50× mais devagar</strong>. Desative scripts pesados no config.lua. Use mapa reduzido com poucos NPCs.</p>
+      <div class="intake-grid">
+        <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Arrastar arquivo de log">
+          <input id="fileInput" type="file" accept=".log,.txt,text/plain">
+          <p class="drop-title">Arraste o log aqui</p>
+          <p class="drop-copy">ou selecione um arquivo manualmente</p>
+          <label class="button primary" for="fileInput">Selecionar arquivo</label>
         </div>
-      </div>
-    </div>
 
-    <!-- FLAGS REF -->
-    <div class="guide-section">
-      <h3>📋 Flags — Referência Completa</h3>
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-        <table class="guide-table">
-          <thead><tr><th>Flag</th><th>O que faz</th><th>Impacto</th></tr></thead>
-          <tbody>
-            <tr><td>--leak-check=full</td><td>Backtrace de cada bloco vazado individualmente</td><td><span class="guide-badge high">Lento</span></td></tr>
-            <tr><td>--show-leak-kinds=definite</td><td>Exibe apenas leaks definitivamente perdidos</td><td><span class="guide-badge low">Rápido</span></td></tr>
-            <tr><td>--show-leak-kinds=all</td><td>Inclui definitely, indirectly, possibly, reachable</td><td><span class="guide-badge medium">Médio</span></td></tr>
-            <tr><td>--track-origins=yes</td><td>Rastreia origem de valores não-inicializados</td><td><span class="guide-badge high">Mais lento</span></td></tr>
-            <tr><td>--num-callers=50</td><td>Profundidade do backtrace (default 12). Essencial para TFS</td><td><span class="guide-badge gb-info">Memória</span></td></tr>
-            <tr><td>--leak-resolution=high</td><td>Agrupa leaks com mais precisão</td><td><span class="guide-badge gb-info">Qualidade</span></td></tr>
-            <tr><td>--error-limit=no</td><td>Sem limite de erros reportados</td><td><span class="guide-badge gb-info">Cobertura</span></td></tr>
-            <tr><td>--expensive-definedness-checks=yes</td><td>Verifica bits de definição individualmente</td><td><span class="guide-badge high">Muito lento</span></td></tr>
-            <tr><td>--partial-loads-ok=yes</td><td>Evita falsos positivos em leituras parciais</td><td><span class="guide-badge low">Neutro</span></td></tr>
-            <tr><td>--log-file=arquivo.log</td><td>Salva output em arquivo separado</td><td><span class="guide-badge low">Essencial</span></td></tr>
-            <tr><td>--suppressions=arquivo.supp</td><td>Ignora leaks conhecidos (OpenSSL, Lua, libc...)</td><td><span class="guide-badge gb-info">Qualidade</span></td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- LENDO O LOG -->
-    <div class="guide-section">
-      <h3>📄 Lendo o Log do Valgrind</h3>
-      <p style="color:var(--muted);font-size:.88em;margin-bottom:14px">Após encerrar o TFS (<code style="color:var(--purple3)">shutdown</code> no console), o log terá esta estrutura:</p>
-      <div class="code-block"><span style="color:var(--muted)">==12345== HEAP SUMMARY:</span>
-<span style="color:var(--muted)">==12345==     in use at exit: 4,096 bytes in 3 blocks</span>
-<span style="color:var(--muted)">==12345==   total heap usage: 1,452,398 allocs, 1,452,395 frees</span>
-
-<span style="color:#ef4444">==12345== 512 bytes in 1 blocks are definitely lost in loss record 2 of 3</span>
-<span style="color:#eab308">==12345==    by 0x456A21: Creature::setDropLoot (creature.cpp:342)</span>
-<span style="color:#eab308">==12345==    by 0x458B10: Game::addCreature (game.cpp:1204)</span>
-
-<span style="color:#ef4444">==12345== LEAK SUMMARY:</span>
-<span style="color:#ef4444">==12345==    definitely lost: 512 bytes in 1 blocks</span>
-<span style="color:#eab308">==12345==  indirectly lost: 128 bytes in 2 blocks</span>
-<span style="color:#22c55e">==12345==  still reachable: 3,456 bytes in 8 blocks</span></div>
-
-      <div class="help-box" style="margin-top:14px">
-        <h3 style="font-size:.85em">🔧 Scripts para Resumo Rápido</h3>
-        <div class="code-block"><span style="color:#6ee7b7"># Resumo do leak summary</span>
-grep -E "(definitely|indirectly|possibly|reachable|suppressed):" valgrind.log | tail -10
-
-<span style="color:#6ee7b7"># Top backtraces de leaks definitivos</span>
-grep -B1 -A 25 "definitely lost" valgrind.log | head -500
-
-<span style="color:#6ee7b7"># Listar arquivos .cpp envolvidos nos leaks</span>
-grep -oP "[a-zA-Z_/]+\.cpp:\d+" valgrind.log | sort | uniq -c | sort -rn | head -20</div>
-      </div>
-    </div>
-
-    <!-- ASAN -->
-    <div class="guide-section">
-      <h3>⚡ ASAN + LeakSanitizer — Build &amp; Execução</h3>
-      <p style="color:var(--muted);font-size:.88em;margin-bottom:14px">ASAN é integrado ao GCC/Clang. Detecta use-after-free, buffer overflow e leaks. Muito mais rápido que Valgrind.</p>
-      <div class="guide-cards" style="margin-bottom:14px">
-        <div class="guide-card"><div class="gc-icon">💀</div><h4>Use-After-Free</h4><p>Acesso a memória já liberada. Causa crashes ou UB silencioso.</p></div>
-        <div class="guide-card"><div class="gc-icon">📦</div><h4>Heap Buffer Overflow</h4><p>Escrita além do final de um buffer alocado no heap.</p></div>
-        <div class="guide-card"><div class="gc-icon">📚</div><h4>Stack Buffer Overflow</h4><p>Overflow em variáveis locais. Pode causar RCE.</p></div>
-        <div class="guide-card"><div class="gc-icon">🔗</div><h4>Memory Leaks (LSAN)</h4><p>Detectados ao encerrar o processo. Similar ao Valgrind.</p></div>
-      </div>
-
-      <div class="help-box" style="margin-bottom:14px">
-        <h3 style="font-size:.85em">🔧 Opção 1: Flags direto no cmake</h3>
-        <div class="code-block">mkdir -p build-asan &amp;&amp; cd build-asan
-
-cmake .. <span style="color:#86efac">-DCMAKE_BUILD_TYPE=Debug</span> \
-  <span style="color:#86efac">-DCMAKE_CXX_FLAGS="-fsanitize=address,leak -fno-omit-frame-pointer -g -O1"</span> \
-  <span style="color:#86efac">-DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,leak"</span>
-
-cmake --build . -- -j4
-
-<span style="color:#6ee7b7"># Executar com ASAN</span>
-ASAN_OPTIONS=detect_leaks=1:halt_on_error=0:log_path=asan.log \
-LSAN_OPTIONS=verbosity=1:log_threads=1 \
-./tfs</div>
-      </div>
-
-      <div class="help-box" style="margin-bottom:14px">
-        <h3 style="font-size:.85em">⚙️ Opção 2: CMakeLists.txt com opção de build</h3>
-        <div class="code-block"><span style="color:#6ee7b7"># Adicione no CMakeLists.txt do TFS</span>
-<span style="color:#c4b5fd">option</span>(<span style="color:#fbbf24">ENABLE_ASAN</span> "Enable AddressSanitizer" OFF)
-
-<span style="color:#ef4444">if</span>(ENABLE_ASAN)
-  <span style="color:#ef4444">if</span>(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    <span style="color:#c4b5fd">target_compile_options</span>(${PROJECT_NAME} PRIVATE
-      <span style="color:#86efac">-fsanitize=address,leak</span>
-      -fno-omit-frame-pointer -g -O1
-    )
-    <span style="color:#c4b5fd">target_link_options</span>(${PROJECT_NAME} PRIVATE
-      <span style="color:#86efac">-fsanitize=address,leak</span>
-    )
-  <span style="color:#ef4444">endif</span>()
-<span style="color:#ef4444">endif</span>()</div>
-      </div>
-
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:14px">
-        <table class="guide-table">
-          <thead><tr><th>Variável</th><th>Valor</th><th>Descrição</th></tr></thead>
-          <tbody>
-            <tr><td>ASAN_OPTIONS</td><td>detect_leaks=1</td><td>Ativa LSAN integrado ao ASAN</td></tr>
-            <tr><td>ASAN_OPTIONS</td><td>halt_on_error=0</td><td>Continua após erro (coleta mais dados)</td></tr>
-            <tr><td>ASAN_OPTIONS</td><td>log_path=asan.log</td><td>Salva output em arquivo</td></tr>
-            <tr><td>LSAN_OPTIONS</td><td>suppressions=lsan.supp</td><td>Arquivo de suppressions</td></tr>
-            <tr><td>LSAN_OPTIONS</td><td>print_suppressions=1</td><td>Mostra quais suppressions foram usadas</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- WORKFLOW -->
-    <div class="guide-section">
-      <h3>🔄 Workflow Completo — Do Zero ao Fix</h3>
-      <div class="guide-flow">
-        <div class="guide-flow-item">
-          <div class="guide-flow-line"><div class="guide-flow-dot" style="border-color:var(--blue);background:rgba(59,130,246,.2)"></div><div class="guide-flow-conn"></div></div>
-          <div class="guide-flow-content"><h4 style="color:var(--blue)">1. Compile com símbolos de debug</h4><p><code style="color:var(--purple3)">cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-g -O0 -fno-omit-frame-pointer"</code></p></div>
-        </div>
-        <div class="guide-flow-item">
-          <div class="guide-flow-line"><div class="guide-flow-dot" style="border-color:var(--green);background:rgba(34,197,94,.2)"></div><div class="guide-flow-conn"></div></div>
-          <div class="guide-flow-content"><h4 style="color:var(--green)">2. Execute com Valgrind ou ASAN</h4><p>ASAN para iterações rápidas. Valgrind para análise profunda de leak persistente.</p></div>
-        </div>
-        <div class="guide-flow-item">
-          <div class="guide-flow-line"><div class="guide-flow-dot" style="border-color:var(--yellow);background:rgba(234,179,8,.2)"></div><div class="guide-flow-conn"></div></div>
-          <div class="guide-flow-content"><h4 style="color:var(--yellow)">3. Reproduza o leak</h4><p>Login/logout, spawns de monsters, compras no NPC, scripts Lua. Depois <code style="color:var(--purple3)">shutdown</code>.</p></div>
-        </div>
-        <div class="guide-flow-item">
-          <div class="guide-flow-line"><div class="guide-flow-dot" style="border-color:var(--orange);background:rgba(249,115,22,.2)"></div><div class="guide-flow-conn"></div></div>
-          <div class="guide-flow-content"><h4 style="color:var(--orange)">4. Analise o log</h4><p>Foque em <strong style="color:var(--text)">definitely lost</strong>. Identifique qual .cpp está na call stack.</p></div>
-        </div>
-        <div class="guide-flow-item">
-          <div class="guide-flow-line"><div class="guide-flow-dot" style="border-color:var(--red);background:rgba(239,68,68,.2)"></div><div class="guide-flow-conn"></div></div>
-          <div class="guide-flow-content"><h4 style="color:var(--red)">5. Corrija o código</h4><p>Use <code style="color:var(--purple3)">std::unique_ptr</code>, <code style="color:var(--purple3)">std::shared_ptr</code>, ou adicione o delete faltante.</p></div>
-        </div>
-        <div class="guide-flow-item">
-          <div class="guide-flow-line"><div class="guide-flow-dot" style="border-color:var(--green);background:rgba(34,197,94,.2)"></div></div>
-          <div class="guide-flow-content"><h4 style="color:var(--green)">6. Valide a correção</h4><p>Recompile e execute novamente. O leak não deve mais aparecer no relatório.</p></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SUPPRESSIONS -->
-    <div class="guide-section">
-      <h3>🚫 Suppressions — Ignorar Falsos Positivos</h3>
-      <p style="color:var(--muted);font-size:.88em;margin-bottom:14px">Crie um arquivo <code style="color:var(--purple3)">tfs.supp</code> para suprimir leaks de bibliotecas externas:</p>
-      <div class="code-block"><span style="color:#6ee7b7"># Lua state global (still reachable, normal)</span>
-{
-   lua_state_global
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   ...
-   fun:lua_newstate
-}
-
-<span style="color:#6ee7b7"># OpenSSL one-time init</span>
-{
-   openssl_init
-   Memcheck:Leak
-   match-leak-kinds: reachable,possible
-   ...
-   fun:CRYPTO_malloc
-   fun:OPENSSL_init_crypto
-}
-
-<span style="color:#6ee7b7"># Boost.Asio thread pool</span>
-{
-   boost_asio_thread
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   ...
-   obj:*libboost_thread*
-}
-
-<span style="color:#6ee7b7"># MySQL connector init</span>
-{
-   mysql_connector_init
-   Memcheck:Leak
-   match-leak-kinds: reachable,possible
-   ...
-   fun:mysql_server_init
-}</div>
-      <div class="guide-callout info">
-        <div class="gc-icon">💡</div>
-        <div class="gc-body">
-          <strong>Gerando automaticamente</strong>
-          <p><code style="color:var(--purple3)">valgrind --gen-suppressions=all --leak-check=full ./tfs 2&gt; raw.supp</code> — edite para manter apenas falsos positivos.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- CORREÇÕES COMUNS -->
-    <div class="guide-section">
-      <h3>🩹 Correções Comuns no TFS</h3>
-
-      <div class="help-box" style="margin-bottom:14px">
-        <h3 style="font-size:.85em">❌ Raw pointer sem delete → ✅ Smart pointer</h3>
-        <div class="code-block"><span style="color:#ef4444">// ANTES (leak)</span>
-Monster* m = <span style="color:#ef4444">new</span> Monster(mtype);
-creatures[m-&gt;getID()] = m;
-<span style="color:var(--muted)">// se removeCreature() não chamar delete → leak</span>
-
-<span style="color:#22c55e">// DEPOIS (correto)</span>
-<span style="color:#c4b5fd">auto</span> m = std::<span style="color:#c4b5fd">make_unique</span>&lt;Monster&gt;(mtype);
-creatures[m-&gt;getID()] = std::move(m);
-<span style="color:var(--muted)">// destruído automaticamente ao remover do map</span></div>
-      </div>
-
-      <div class="help-box" style="margin-bottom:14px">
-        <h3 style="font-size:.85em">❌ Exception antes do delete → ✅ RAII</h3>
-        <div class="code-block"><span style="color:#ef4444">// ANTES (leak em exceção)</span>
-Item* item = <span style="color:#ef4444">new</span> Item(itemId);
-processItem(item);   <span style="color:var(--muted)">// pode lançar exceção!</span>
-<span style="color:#ef4444">delete</span> item;         <span style="color:var(--muted)">// nunca executado se throw</span>
-
-<span style="color:#22c55e">// DEPOIS (exception-safe)</span>
-<span style="color:#c4b5fd">auto</span> item = std::<span style="color:#c4b5fd">make_unique</span>&lt;Item&gt;(itemId);
-processItem(item.get());  <span style="color:var(--muted)">// se throw, unique_ptr destrói</span></div>
-      </div>
-
-      <div class="guide-callout ok">
-        <div class="gc-icon">✅</div>
-        <div class="gc-body">
-          <strong>Regra de Ouro</strong>
-          <p>Em C++ moderno: <strong style="color:var(--text)">nunca use new raw sem smart pointer.</strong> Use <code style="color:var(--purple3)">std::make_unique</code> para ownership exclusivo e <code style="color:var(--purple3)">std::make_shared</code> para compartilhado.</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- COMPARAÇÃO -->
-    <div class="guide-section">
-      <h3>⚖️ Valgrind vs ASAN — Quando Usar</h3>
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden">
-        <table class="guide-table">
-          <thead><tr><th>Critério</th><th>Valgrind Memcheck</th><th>ASAN / LSAN</th></tr></thead>
-          <tbody>
-            <tr><td>Overhead</td><td>10–50× mais lento</td><td>~2× mais lento</td></tr>
-            <tr><td>Recompilação</td><td>Não (mas -g recomendado)</td><td>Sim (-fsanitize=address)</td></tr>
-            <tr><td>Leaks</td><td>Definitivos, indiretos, possíveis, reachable</td><td>Diretos e indiretos (via LSAN)</td></tr>
-            <tr><td>Use-After-Free</td><td>✅ Detecta</td><td>✅ Detecta (melhor)</td></tr>
-            <tr><td>Buffer Overflow</td><td>✅ Parcial</td><td>✅ Heap + Stack + Global</td></tr>
-            <tr><td>Uso ideal</td><td>Análise profunda de leak específico</td><td>CI/CD, desenvolvimento diário</td></tr>
-            <tr><td>Compatibilidade</td><td>Qualquer binário Linux</td><td>GCC ≥ 4.8 / Clang ≥ 3.1</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="guide-callout info" style="margin-top:14px">
-        <div class="gc-icon">🎯</div>
-        <div class="gc-body">
-          <strong>Estratégia para TFS</strong>
-          <p>Use <strong style="color:var(--text)">ASAN no dia a dia</strong> (loop de dev). Quando precisar de mais contexto (backtraces profundos), mude para <strong style="color:var(--text)">Valgrind</strong> com <code style="color:var(--purple3)">--num-callers=50</code>.</p>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ══ FOOTER ═══════════════════════════════════════════ -->
-<div class="footer-wave"></div>
-<footer>
-  <p class="brand">🔍 TFS Memory Analyzer</p>
-  <p>
-    Developed by <a href="https://github.com/Mateuzkl" target="_blank">Mateuzkl</a><br>
-    Part of <a href="https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60" target="_blank">TFS 1.8 Downgrade — Protocol 8.60</a>
-  </p>
-  <p style="margin-top:16px">
-    <a href="https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60">GitHub</a> ·
-    <a href="https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/issues">Issues</a> ·
-    <a href="https://github.com/Mateuzkl/forgottenserver-downgrade-1.8-8.60/releases">Releases</a>
-  </p>
-  <p style="margin-top:16px;font-size:.75em;opacity:.45">Made with 💜 by Mateuzkl</p>
-</footer>
-
-<script>
-// ============================================================
-//  STATE
-// ============================================================
-let parsedErrors = [];
-let parsedLeaks  = [];
-let rawSource    = 'valgrind';
-let heapSummary  = null; // { inUseBytes, inUseBlocks, allocs, frees, totalAllocated }
-
-// ============================================================
-//  FILE LOAD
-// ============================================================
-document.getElementById('logFile').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-        const txt = ev.target.result;
-        rawSource    = detectSource(txt);
-        parsedErrors = [];
-        parsedLeaks  = [];
-        heapSummary  = null;
-        if (rawSource === 'valgrind') parseValgrind(txt);
-        else                          parseAsan(txt);
-        renderAll();
-    };
-    reader.readAsText(file);
-});
-
-function detectSource(txt) {
-    if (txt.includes('==') && txt.includes('Memcheck')) return 'valgrind';
-    if (txt.includes('AddressSanitizer') || txt.includes('ASAN') || txt.includes('ERROR: AddressSanitizer')) return 'asan';
-    if (txt.includes('==') && (txt.includes('Invalid read') || txt.includes('Invalid write'))) return 'valgrind';
-    return 'valgrind';
-}
-
-// ============================================================
-//  VALGRIND PARSER
-// ============================================================
-function parseValgrind(txt) {
-    const lines = txt.split(/\r?\n/);
-
-    // Parse HEAP SUMMARY
-    const heapM = txt.match(/in use at exit:\s+([\d,]+) bytes in ([\d,]+) blocks/);
-    const allocM = txt.match(/total heap usage:\s+([\d,]+) allocs,\s+([\d,]+) frees,\s+([\d,]+) bytes allocated/);
-    if (heapM || allocM) {
-        heapSummary = {
-            inUseBytes: heapM ? heapM[1] : '0',
-            inUseBlocks: heapM ? heapM[2] : '0',
-            allocs: allocM ? allocM[1] : '?',
-            frees: allocM ? allocM[2] : '?',
-            totalAllocated: allocM ? allocM[3] : '?'
-        };
-    }
-
-    // Parse ERROR SUMMARY
-    const errSumM = txt.match(/ERROR SUMMARY:\s+(\d+) errors? from (\d+) contexts?/);
-
-    const errorKeywords = ['Invalid read','Invalid write','Use of uninitialised','Conditional jump','Invalid free','Mismatched free'];
-    let blocks = [], currentBlock = null;
-
-    for (let i = 0; i < lines.length; i++) {
-        const clean = lines[i].replace(/^==\d+== ?/, '');
-        if (errorKeywords.some(k => clean.startsWith(k))) {
-            if (currentBlock) blocks.push(currentBlock);
-            currentBlock = { type: clean.trim(), frames: [], extraLines: [] };
-        } else if (clean.startsWith('at 0x') || clean.startsWith('by 0x')) {
-            if (currentBlock) currentBlock.frames.push(clean.trim());
-        } else if (clean.startsWith('Address') || clean.startsWith('Block was') || clean.startsWith('Source')) {
-            if (currentBlock) currentBlock.extraLines.push(clean.trim());
-        } else if (clean.trim() === '' && currentBlock && currentBlock.frames.length > 0) {
-            blocks.push(currentBlock); currentBlock = null;
-        }
-    }
-    if (currentBlock) blocks.push(currentBlock);
-
-    const seen = new Set();
-    blocks.forEach(b => {
-        const key = b.type + '|' + (b.frames[0] || '');
-        if (seen.has(key)) return;
-        seen.add(key);
-        parsedErrors.push({ type:b.type, severity:classifyValgrindError(b.type), frames:b.frames, extra:b.extraLines, source:'valgrind' });
-    });
-
-    // Leak summary
-    const leakRegions = txt.match(/LEAK SUMMARY:[\s\S]*?(?=\n\n|ERROR SUMMARY|$)/gi);
-    const leakTypes = [
-        { key:'definitely lost', type:'definitely' },
-        { key:'indirectly lost', type:'indirectly' },
-        { key:'possibly lost',   type:'possibly'   },
-        { key:'still reachable', type:'reachable'  },
-    ];
-    if (leakRegions) {
-        leakRegions.forEach(region => {
-            leakTypes.forEach(lt => {
-                const rx = new RegExp(lt.key + ':\\s+([\\d,]+) bytes in ([\\d,]+) blocks', 'i');
-                const m = region.match(rx);
-                if (m && m[1] !== '0') parsedLeaks.push({ leakType:lt.type, bytes:m[1], blocks:m[2], frames:[] });
-            });
-        });
-    }
-
-    // Individual leak blocks (matches both "definitely lost" and "still reachable in loss record")
-    const leakBlockRx = /==\d+==\s+([\d,]+) bytes in (\d+) blocks are (definitely lost|indirectly lost|possibly lost|still reachable)[\s\S]*?(?=\n==\d+==\s*\n|\n==\d+== \n|$)/gi;
-    let lm;
-    const seenLeakKeys = new Set();
-    while ((lm = leakBlockRx.exec(txt)) !== null) {
-        const frames = [];
-        const frameLines = lm[0].match(/(?:at|by) 0x[0-9A-Fa-f]+:[^\n]+/g) || [];
-        frameLines.forEach(f => frames.push(f.replace(/^==\d+==\s*/, '')));
-        const lt = lm[3].toLowerCase().replace(' lost','').replace('still ','').trim();
-        const leakType = lt === 'definitely' ? 'definitely' : lt === 'indirectly' ? 'indirectly' : lt === 'possibly' ? 'possibly' : 'reachable';
-        const key = leakType + '|' + lm[1] + '|' + (frames[0]||'');
-        if (!seenLeakKeys.has(key)) {
-            seenLeakKeys.add(key);
-            parsedLeaks.push({ leakType, bytes:lm[1], blocks:lm[2], frames });
-        }
-    }
-    // Remove summary-only entries that have no frames if we found individual blocks with frames
-    const hasFrameLeaks = parsedLeaks.some(l => l.frames.length > 0);
-    if (hasFrameLeaks) {
-        // keep only entries with frames (individual blocks are more detailed)
-        const withFrames = parsedLeaks.filter(l => l.frames.length > 0);
-        if (withFrames.length > 0) { parsedLeaks.length = 0; withFrames.forEach(l => parsedLeaks.push(l)); }
-    }
-}
-
-function classifyValgrindError(type) {
-    if (type.startsWith('Invalid write')) return 'critical';
-    if (type.startsWith('Invalid read'))  return 'high';
-    if (type.startsWith('Invalid free'))  return 'critical';
-    if (type.startsWith('Mismatched'))    return 'critical';
-    if (type.startsWith('Use of uninitialised') || type.startsWith('Conditional')) return 'warning';
-    return 'info';
-}
-
-// ============================================================
-//  ASAN PARSER
-// ============================================================
-function parseAsan(txt) {
-    const asanBlocks = txt.split(/(?=ERROR: AddressSanitizer)/);
-    asanBlocks.forEach(block => {
-        if (!block.includes('AddressSanitizer')) return;
-        const titleMatch = block.match(/ERROR: AddressSanitizer: ([^\n]+)/);
-        if (!titleMatch) return;
-        const frames = [];
-        const frameLines = block.match(/#\d+\s+0x[0-9a-f]+[^\n]*/g) || [];
-        frameLines.forEach(f => frames.push(f.trim()));
-        parsedErrors.push({ type:titleMatch[1].trim(), severity:classifyAsanError(titleMatch[1]), frames, extra:[], source:'asan' });
-    });
-
-    const leakBlocks = txt.split(/(?=Direct leak|Indirect leak)/);
-    leakBlocks.forEach(block => {
-        const m = block.match(/(Direct|Indirect) leak of (\d+) byte\(s\) in (\d+) object/);
-        if (!m) return;
-        const frames = [];
-        const frameLines = block.match(/#\d+\s+0x[0-9a-f]+[^\n]*/g) || [];
-        frameLines.slice(0, 8).forEach(f => frames.push(f.trim()));
-        parsedLeaks.push({ leakType:m[1].toLowerCase() === 'direct' ? 'definitely' : 'indirectly', bytes:m[2], blocks:m[3], frames });
-    });
-}
-
-function classifyAsanError(type) {
-    if (type.includes('heap-use-after-free') || type.includes('use-after-free')) return 'critical';
-    if (type.includes('heap-buffer-overflow') || type.includes('stack-buffer-overflow')) return 'critical';
-    if (type.includes('double-free'))   return 'critical';
-    if (type.includes('null-dereference')) return 'high';
-    if (type.includes('use-after-return')) return 'high';
-    return 'warning';
-}
-
-// ============================================================
-//  RENDER
-// ============================================================
-function renderAll() { updateStats(); renderErrors(); renderLeaks(); renderSummaryTable(); }
-
-function formatBytes(str) {
-    const n = parseInt(String(str).replace(/,/g,''), 10);
-    if (isNaN(n)) return str;
-    if (n >= 1073741824) return (n/1073741824).toFixed(2) + ' GB';
-    if (n >= 1048576) return (n/1048576).toFixed(2) + ' MB';
-    if (n >= 1024) return (n/1024).toFixed(2) + ' KB';
-    return n + ' B';
-}
-
-function sumLeakBytes(list) {
-    return list.reduce((s,l) => s + parseInt(String(l.bytes).replace(/,/g,''),10), 0);
-}
-
-function updateStats() {
-    const critical = parsedErrors.filter(e => e.severity === 'critical').length;
-    const high     = parsedErrors.filter(e => e.severity === 'high').length;
-    const leaksDef = parsedLeaks.filter(l  => l.leakType === 'definitely');
-    const leaksInd = parsedLeaks.filter(l  => l.leakType === 'indirectly');
-    const leaksPos = parsedLeaks.filter(l  => l.leakType === 'possibly');
-    const leaksRch = parsedLeaks.filter(l  => l.leakType === 'reachable');
-    const totalErrs = parsedErrors.length;
-    const totalLeaks = parsedLeaks.length;
-
-    document.getElementById('st-critical').textContent = critical;
-    document.getElementById('st-high').textContent     = high;
-    document.getElementById('st-leaks').textContent    = totalLeaks ? totalLeaks + ' blocos' : '—';
-    document.getElementById('st-total').textContent    = (totalErrs + totalLeaks) ? (totalErrs + totalLeaks) : '—';
-
-    const src = document.getElementById('overviewSummary');
-    if (!parsedErrors.length && !parsedLeaks.length) { src.innerHTML = ''; return; }
-
-    const hasDef = leaksDef.length > 0;
-    const overall = critical > 0 ? '🔴 CRÍTICO' : high > 0 ? '🟡 ATENÇÃO' : hasDef ? '🟡 ATENÇÃO' : totalLeaks > 0 ? '✅ OK — Apenas Still Reachable' : '✅ OK';
-    const colMap  = { '🔴 CRÍTICO':'#ef4444', '🟡 ATENÇÃO':'#eab308' };
-    const overallColor = colMap[overall] || '#22c55e';
-
-    let leakRows = '';
-    if (leaksDef.length) leakRows += `<tr><td><span class="badge badge-critical">DEFINITELY LOST</span></td><td><strong>${leaksDef.length} blocos</strong></td><td>${formatBytes(sumLeakBytes(leaksDef))}</td><td>Memória 100% perdida — corrigir!</td></tr>`;
-    if (leaksInd.length) leakRows += `<tr><td><span class="badge badge-high">INDIRECTLY LOST</span></td><td><strong>${leaksInd.length} blocos</strong></td><td>${formatBytes(sumLeakBytes(leaksInd))}</td><td>Filho de bloco definitely lost</td></tr>`;
-    if (leaksPos.length) leakRows += `<tr><td><span class="badge badge-warning">POSSIBLY LOST</span></td><td><strong>${leaksPos.length} blocos</strong></td><td>${formatBytes(sumLeakBytes(leaksPos))}</td><td>Ponteiro interior — investigar</td></tr>`;
-    if (leaksRch.length) leakRows += `<tr><td><span class="badge badge-ok">STILL REACHABLE</span></td><td><strong>${leaksRch.length} blocos</strong></td><td>${formatBytes(sumLeakBytes(leaksRch))}</td><td>Ponteiro válido, não liberado (normal em globals)</td></tr>`;
-
-    src.innerHTML = `
-      <div class="overview-box">
-        <h3 style="color:${overallColor}">Status Geral: ${overall}</h3>
-        <p>Fonte detectada: <strong>${rawSource.toUpperCase()}</strong></p>
-        ${totalErrs > 0 ? `
-        <h4 style="font-size:.88em;color:var(--text);margin:16px 0 8px">🚨 Erros de Memória</h4>
-        <table class="summary-table">
-          <thead><tr><th>Severidade</th><th>Quantidade</th><th>Bytes</th><th>Impacto</th></tr></thead>
-          <tbody>
-            <tr><td><span class="badge badge-critical">CRITICAL</span></td><td><strong>${critical}</strong></td><td>—</td><td>Crash / corrupção de heap</td></tr>
-            <tr><td><span class="badge badge-high">HIGH</span></td><td><strong>${high}</strong></td><td>—</td><td>Comportamento indefinido</td></tr>
-            <tr><td><span class="badge badge-warning">WARNING</span></td><td><strong>${parsedErrors.filter(e=>e.severity==='warning').length}</strong></td><td>—</td><td>Lógica incorreta</td></tr>
-          </tbody>
-        </table>` : ''}
-        ${totalLeaks > 0 ? `
-        <h4 style="font-size:.88em;color:var(--text);margin:16px 0 8px">💧 Memory Leaks</h4>
-        <table class="summary-table">
-          <thead><tr><th>Tipo</th><th>Blocos</th><th>Tamanho</th><th>Impacto</th></tr></thead>
-          <tbody>${leakRows}</tbody>
-        </table>
-        <p style="margin-top:10px;font-size:.82em;color:var(--muted)">Total: <strong style="color:var(--text)">${formatBytes(sumLeakBytes(parsedLeaks))}</strong> em <strong style="color:var(--text)">${totalLeaks}</strong> blocos</p>` : ''}
-        ${heapSummary ? `
-        <h4 style="font-size:.88em;color:var(--text);margin:16px 0 8px">📊 Heap Summary</h4>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
-          <div style="background:var(--bg3);padding:12px 14px;border-radius:8px;border:1px solid var(--border)">
-            <div style="font-size:.7em;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px">Em uso na saída</div>
-            <div style="font-size:1.2em;font-weight:800;color:var(--purple2)">${formatBytes(heapSummary.inUseBytes)}</div>
-            <div style="font-size:.75em;color:var(--muted)">${heapSummary.inUseBlocks} blocos</div>
+        <div class="paste-box">
+          <label class="field-label" for="pasteInput">Texto do log</label>
+          <textarea id="pasteInput" spellcheck="false" placeholder="Cole aqui a saida completa do Valgrind ou AddressSanitizer."></textarea>
+          <div class="button-row">
+            <button class="button secondary" id="parsePasteBtn" type="button">Processar texto colado</button>
+            <button class="button ghost" id="clearBtn" type="button">Limpar</button>
           </div>
-          <div style="background:var(--bg3);padding:12px 14px;border-radius:8px;border:1px solid var(--border)">
-            <div style="font-size:.7em;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px">Total alocado</div>
-            <div style="font-size:1.2em;font-weight:800;color:var(--cyan)">${formatBytes(heapSummary.totalAllocated)}</div>
-            <div style="font-size:.75em;color:var(--muted)">${heapSummary.allocs} allocs</div>
+        </div>
+      </div>
+
+      <p class="status-line" id="loadMessage">Nenhum log carregado ainda.</p>
+    </section>
+
+    <section class="stats-grid" aria-label="Indicadores principais">
+      <article class="stat-card critical">
+        <p class="stat-label">Critical</p>
+        <p class="stat-value" id="criticalCount">0</p>
+        <p class="stat-sub" id="criticalMeta">Sem erros criticos</p>
+      </article>
+
+      <article class="stat-card warning">
+        <p class="stat-label">High / Warning</p>
+        <p class="stat-value" id="warningCount">0</p>
+        <p class="stat-sub" id="warningMeta">Sem alertas de memoria</p>
+      </article>
+
+      <article class="stat-card info">
+        <p class="stat-label">Loss records</p>
+        <p class="stat-value" id="leakRecordCount">0</p>
+        <p class="stat-sub" id="leakRecordMeta">Nenhum leak registrado</p>
+      </article>
+
+      <article class="stat-card success">
+        <p class="stat-label">Total findings</p>
+        <p class="stat-value" id="totalFindingCount">0</p>
+        <p class="stat-sub" id="totalFindingMeta">Parser pronto para receber um log</p>
+      </article>
+    </section>
+
+    <section class="panel overview-panel" id="overview-panel">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Resumo</p>
+          <h2>Visao geral</h2>
+        </div>
+        <p class="section-copy">O bloco abaixo cruza o resumo final do log com os registros individuais que o parser conseguiu recuperar.</p>
+      </div>
+
+      <div id="statusBanner" class="status-banner empty">Carregue um log para gerar o resumo.</div>
+
+      <div class="meta-grid" id="metaGrid"></div>
+
+      <div class="overview-grid">
+        <article class="summary-panel">
+          <div class="summary-panel-header">
+            <h3>Heap summary</h3>
+            <p>Valores lidos diretamente do log</p>
           </div>
-          <div style="background:var(--bg3);padding:12px 14px;border-radius:8px;border:1px solid var(--border)">
-            <div style="font-size:.7em;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px">Allocs / Frees</div>
-            <div style="font-size:1.2em;font-weight:800;color:${heapSummary.allocs === heapSummary.frees ? 'var(--green)' : 'var(--yellow)'}">${heapSummary.allocs} / ${heapSummary.frees}</div>
-            <div style="font-size:.75em;color:var(--muted)">${parseInt(heapSummary.allocs.replace(/,/g,''))-parseInt(heapSummary.frees.replace(/,/g,''))} pendentes</div>
+          <div id="heapSummary"></div>
+        </article>
+
+        <article class="summary-panel">
+          <div class="summary-panel-header">
+            <h3>Leak summary</h3>
+            <p>Bytes e blocos por categoria</p>
           </div>
-        </div>` : ''}
-      </div>`;
-}
+          <div id="leakSummary"></div>
+        </article>
 
-function renderErrors() {
-    const container  = document.getElementById('errorsContent');
-    const filter     = document.getElementById('errFilter').value.toLowerCase();
-    const sevFilter  = document.getElementById('errSeverity').value;
-    const sort       = document.getElementById('errSort').value;
-
-    let list = [...parsedErrors];
-    if (filter)           list = list.filter(e => (e.type + e.frames.join(' ')).toLowerCase().includes(filter));
-    if (sevFilter !== 'all') list = list.filter(e => e.severity === sevFilter);
-
-    const order = { critical:0, high:1, warning:2, info:3 };
-    if (sort === 'severity') list.sort((a,b) => order[a.severity] - order[b.severity]);
-    if (sort === 'type')     list.sort((a,b) => a.type.localeCompare(b.type));
-    if (sort === 'func')     list.sort((a,b) => (a.frames[0]||'z').localeCompare(b.frames[0]||'z'));
-
-    if (!list.length) {
-        container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nenhum erro encontrado com esses filtros.</p></div>';
-        return;
-    }
-
-    const sevLabel  = { critical:'🔴 CRITICAL', high:'🟡 HIGH', warning:'⚠️ WARNING', info:'ℹ️ INFO' };
-    const badgeMap  = { critical:'badge-critical', high:'badge-high', warning:'badge-warning', info:'badge-info' };
-
-    container.innerHTML = list.map(e => {
-        const firstFunc = extractFuncName(e.frames[0] || '');
-        const stackHtml = e.frames.map(f => formatFrame(f)).join('\n');
-        const extraHtml = e.extra.map(x => `<div style="margin-top:6px;color:var(--muted);font-size:.85em">${escHtml(x)}</div>`).join('');
-        return `
-        <div class="error-card severity-${e.severity}">
-          <div class="error-card-header" onclick="toggleCard(this)">
-            <span class="error-title">${escHtml(e.type)}</span>
-            <span class="error-meta">${firstFunc}</span>
-            <span class="badge ${badgeMap[e.severity]}">${sevLabel[e.severity]}</span>
-            <span class="error-arrow">▼</span>
+        <article class="summary-panel">
+          <div class="summary-panel-header">
+            <h3>Erros</h3>
+            <p>Contextos agrupados por severidade</p>
           </div>
-          <div class="error-body">
-            <strong style="font-size:.85em;color:var(--muted)">Stack trace:</strong>
-            <div class="stack-trace">${stackHtml || '(sem frames)'}</div>
-            ${extraHtml}
-            <div style="margin-top:10px;font-size:.78em;color:var(--muted)">Fonte: ${e.source.toUpperCase()}</div>
-          </div>
-        </div>`;
-    }).join('');
-}
+          <div id="errorSummary"></div>
+        </article>
+      </div>
 
-function renderLeaks() {
-    const container = document.getElementById('leaksContent');
-    const filter    = document.getElementById('leakFilter').value.toLowerCase();
-    const typeF     = document.getElementById('leakType').value;
+      <div class="diagnostics-panel">
+        <div class="summary-panel-header">
+          <h3>Checagens do parser</h3>
+          <p>Conferencias para garantir que o resumo bate com os registros encontrados</p>
+        </div>
+        <div id="diagnosticsContent"></div>
+      </div>
+    </section>
 
-    let list = [...parsedLeaks];
-    if (typeF !== 'all') list = list.filter(l => l.leakType === typeF || l.leakType === typeF.replace('-','_'));
-    if (filter)          list = list.filter(l => (l.leakType + l.frames.join(' ')).toLowerCase().includes(filter));
+    <section class="panel" id="leak-panel">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Detalhes</p>
+          <h2>Loss records</h2>
+        </div>
+        <p class="section-copy">Cada registro mostra tamanho, quantidade de blocos, stack trace e o trecho bruto correspondente no log.</p>
+      </div>
 
-    if (!list.length) {
-        container.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nenhum leak encontrado.</p></div>';
-        return;
-    }
+      <div class="toolbar">
+        <label class="toolbar-field">
+          <span>Buscar</span>
+          <input id="leakSearch" type="search" placeholder="Funcao, arquivo, texto do bloco">
+        </label>
+        <label class="toolbar-field">
+          <span>Tipo</span>
+          <select id="leakTypeFilter">
+            <option value="all">Todos</option>
+            <option value="definitely">Definitely lost</option>
+            <option value="indirectly">Indirectly lost</option>
+            <option value="possibly">Possibly lost</option>
+            <option value="reachable">Still reachable</option>
+          </select>
+        </label>
+        <label class="toolbar-field">
+          <span>Ordenar</span>
+          <select id="leakSort">
+            <option value="appearance">Ordem do log</option>
+            <option value="bytes-desc">Maior tamanho</option>
+            <option value="bytes-asc">Menor tamanho</option>
+            <option value="type">Tipo</option>
+          </select>
+        </label>
+      </div>
 
-    const leakColors = { definitely:'critical', indirectly:'high', possibly:'warning', reachable:'info', definitely_lost:'critical', still_reachable:'info' };
-    const leakLabel  = { definitely:'Definitely Lost', indirectly:'Indirectly Lost', possibly:'Possibly Lost', reachable:'Still Reachable' };
+      <div id="leakRecordsContent" class="records-list"></div>
+    </section>
 
-    container.innerHTML = list.map(l => {
-        const sev   = leakColors[l.leakType] || 'info';
-        const label = leakLabel[l.leakType] || l.leakType;
-        const stackHtml = l.frames.map(f => formatFrame(f)).join('\n');
-        const bytesF = formatBytes(l.bytes);
-        const firstFunc = l.frames.length ? extractFuncName(l.frames[0]) : '';
-        return `
-        <div class="error-card severity-${sev}">
-          <div class="error-card-header" onclick="toggleCard(this)">
-            <span class="error-title">${label}: ${bytesF} em ${l.blocks} blocos</span>
-            <span class="error-meta">${firstFunc}</span>
-            <span class="badge badge-${sev}">${label.toUpperCase()}</span>
-            <span class="error-arrow">▼</span>
-          </div>
-          <div class="error-body">
-            ${l.frames.length ? `<strong style="font-size:.85em;color:var(--muted)">Alocado em:</strong><div class="stack-trace">${stackHtml}</div>` : '<p style="color:var(--muted);font-size:.88em">Sem stack trace disponível.</p>'}
-          </div>
-        </div>`;
-    }).join('');
-}
+    <section class="panel" id="error-panel">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Detalhes</p>
+          <h2>Erros de memoria</h2>
+        </div>
+        <p class="section-copy">Quando o log tiver invalid read/write, uninitialised values ou outros contextos, eles aparecem aqui em separado.</p>
+      </div>
 
-function renderSummaryTable() {
-    const container = document.getElementById('summaryContent');
-    if (!parsedErrors.length && !parsedLeaks.length) {
-        container.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Carregue um log para ver o resumo.</p></div>';
-        return;
-    }
+      <div class="toolbar">
+        <label class="toolbar-field">
+          <span>Buscar</span>
+          <input id="errorSearch" type="search" placeholder="Tipo, funcao, nota">
+        </label>
+        <label class="toolbar-field">
+          <span>Severidade</span>
+          <select id="errorSeverityFilter">
+            <option value="all">Todas</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="warning">Warning</option>
+            <option value="info">Info</option>
+          </select>
+        </label>
+        <label class="toolbar-field">
+          <span>Ordenar</span>
+          <select id="errorSort">
+            <option value="appearance">Ordem do log</option>
+            <option value="severity">Severidade</option>
+            <option value="type">Tipo</option>
+          </select>
+        </label>
+      </div>
 
-    let html = '';
+      <div id="errorRecordsContent" class="records-list"></div>
+    </section>
 
-    // Error summary
-    if (parsedErrors.length) {
-    const grouped = {};
-    parsedErrors.forEach(e => {
-        const key = e.type.split('of')[0].trim().split('in')[0].trim();
-        if (!grouped[key]) grouped[key] = { severity:e.severity, count:0, funcs:new Set() };
-        grouped[key].count++;
-        const f = extractFuncName(e.frames[0] || '');
-        if (f) grouped[key].funcs.add(f);
-    });
-    const order   = { critical:0, high:1, warning:2, info:3 };
-    const rows    = Object.entries(grouped).sort((a,b) => order[a[1].severity] - order[b[1].severity]);
-    const badgeMap = { critical:'badge-critical', high:'badge-high', warning:'badge-warning', info:'badge-info' };
-    const sevLabel = { critical:'CRITICAL', high:'HIGH', warning:'WARNING', info:'INFO' };
-    const maxCount = Math.max(...rows.map(r => r[1].count));
+    <section class="panel raw-panel" id="raw-panel">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Bruto</p>
+          <h2>Log completo</h2>
+        </div>
+        <p class="section-copy">Nada e truncado aqui. A saida e exibida linha por linha, com busca e destaque para facilitar a navegacao.</p>
+      </div>
 
-    html += `
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px">
-        <table class="summary-table">
-          <thead><tr><th>Tipo de Erro</th><th>Severidade</th><th>Ocorrências</th><th>Funções Afetadas</th></tr></thead>
-          <tbody>${rows.map(([type, data]) => `
-            <tr>
-              <td><strong>${escHtml(type)}</strong></td>
-              <td><span class="badge ${badgeMap[data.severity]}">${sevLabel[data.severity]}</span></td>
-              <td>
-                <strong>${data.count}</strong>
-                <div class="bar-wrap"><div class="bar-fill bar-${data.severity === 'critical' ? 'critical' : data.severity === 'high' ? 'warning' : 'info'}"
-                  style="width:${Math.round(data.count/maxCount*100)}%">${data.count}</div></div>
-              </td>
-              <td style="font-size:.82em;color:var(--muted)">${[...data.funcs].slice(0,3).join(', ')}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-    } // end if parsedErrors
+      <div class="toolbar raw-toolbar">
+        <label class="toolbar-field grow">
+          <span>Buscar no log</span>
+          <input id="rawSearch" type="search" placeholder="Digite um trecho para destacar no log bruto">
+        </label>
+        <div class="toolbar-meta" id="rawLogMeta">0 linhas</div>
+      </div>
 
-    // Leak summary by type
-    if (parsedLeaks.length) {
-        const leakGrouped = {};
-        const leakLabel = { definitely:'Definitely Lost', indirectly:'Indirectly Lost', possibly:'Possibly Lost', reachable:'Still Reachable' };
-        const leakBadge = { definitely:'badge-critical', indirectly:'badge-high', possibly:'badge-warning', reachable:'badge-ok' };
-        const leakOrder = { definitely:0, indirectly:1, possibly:2, reachable:3 };
-        parsedLeaks.forEach(l => {
-            if (!leakGrouped[l.leakType]) leakGrouped[l.leakType] = { count:0, totalBytes:0, funcs:new Set() };
-            leakGrouped[l.leakType].count++;
-            leakGrouped[l.leakType].totalBytes += parseInt(String(l.bytes).replace(/,/g,''),10);
-            if (l.frames.length) {
-                const f = extractFuncName(l.frames[0]);
-                if (f) leakGrouped[l.leakType].funcs.add(f);
-            }
-        });
-        const leakRows = Object.entries(leakGrouped).sort((a,b) => (leakOrder[a[0]]||9) - (leakOrder[b[0]]||9));
-        html += `
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden">
-        <table class="summary-table">
-          <thead><tr><th>Tipo de Leak</th><th>Severidade</th><th>Blocos</th><th>Tamanho Total</th><th>Funções Envolvidas</th></tr></thead>
-          <tbody>${leakRows.map(([type, data]) => `
-            <tr>
-              <td><strong>${leakLabel[type]||type}</strong></td>
-              <td><span class="badge ${leakBadge[type]||'badge-info'}">${(leakLabel[type]||type).toUpperCase()}</span></td>
-              <td><strong>${data.count}</strong></td>
-              <td><strong>${formatBytes(data.totalBytes)}</strong></td>
-              <td style="font-size:.82em;color:var(--muted)">${[...data.funcs].slice(0,4).join(', ') || '—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-    }
+      <div id="rawLogContent" class="raw-log"></div>
+    </section>
+  </main>
 
-    container.innerHTML = html;
-}
-
-// ============================================================
-//  HELPERS
-// ============================================================
-function extractFuncName(frame) {
-    let m = frame.match(/(?:at|by) 0x[0-9a-fA-F]+: ([^(\n]+)/);
-    if (m) return m[1].trim().substring(0, 60);
-    m = frame.match(/in ([^\s(]+)/);
-    if (m) return m[1].trim().substring(0, 60);
-    return frame.substring(0, 50);
-}
-
-function formatFrame(frame) {
-    frame = escHtml(frame);
-    frame = frame.replace(/(at|by)/, `<span class="stack-line-key">$1</span>`);
-    frame = frame.replace(/(0x[0-9a-fA-F]+)/, `<span class="stack-line-addr">$1</span>`);
-    frame = frame.replace(/: ([^(\n<]+)/, `: <span class="stack-line-func">$1</span>`);
-    frame = frame.replace(/\(([^)]+)\)/, `(<span class="stack-line-file">$1</span>)`);
-    return frame;
-}
-
-function escHtml(str) {
-    return String(str)
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function toggleCard(header) {
-    const body  = header.nextElementSibling;
-    const arrow = header.querySelector('.error-arrow');
-    body.classList.toggle('open');
-    arrow.textContent = body.classList.contains('open') ? '▲' : '▼';
-}
-
-function switchTab(name, el) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById(name).classList.add('active');
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('errFilter').addEventListener('input', renderErrors);
-    document.getElementById('errSeverity').addEventListener('change', renderErrors);
-    document.getElementById('errSort').addEventListener('change', renderErrors);
-    document.getElementById('leakFilter').addEventListener('input', renderLeaks);
-    document.getElementById('leakType').addEventListener('change', renderLeaks);
-});
-</script>
+  <script src="./assets/app.js"></script>
 </body>
 </html>
